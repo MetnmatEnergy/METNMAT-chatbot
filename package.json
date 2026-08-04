@@ -15,7 +15,8 @@
     "setup:full": "bun run parse:products && bun run seed:products && bun run build:widget"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/compression": "^1.8.1"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -30,6 +31,7 @@
     "@mastra/pinecone": "^1.0.0",
     "@mastra/rag": "^2.0.0",
     "axios": "^1.13.2",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "franc": "^6.2.0",

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import compression from "compression";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -23,6 +24,25 @@ const UI_PATH = path.join(__dirname, "../iframe-chat-widget/iframe-ui/dist");
 const PUBLIC_PATH = path.join(__dirname, "../public");
 
 const allowedOrigins = config.app.allowedOrigins;
+
+/**
+ * Compress responses. Mounted FIRST so it wraps everything below, including the
+ * two static mounts that serve the chat bundle.
+ *
+ * Nothing was compressing this service at all. Measured against production:
+ *
+ *   GET /chat-widget/assets/index-*.js   accept-encoding: gzip, br
+ *   → no content-encoding header, content-length: 356216
+ *
+ * Express does not compress by default and Cloud Run does not do it for you, so
+ * every first-time visitor downloaded 356 KB of JavaScript that gzips to about
+ * 114 KB. One line is worth more here than any code splitting available in this
+ * bundle.
+ *
+ * The default filter already skips what should not be compressed — anything
+ * already encoded, images, fonts — and honours `Cache-Control: no-transform`.
+ */
+app.use(compression());
 
 app.use(
   cors({
