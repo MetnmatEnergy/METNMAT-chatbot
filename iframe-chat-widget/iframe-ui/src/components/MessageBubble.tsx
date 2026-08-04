@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { SenderType, type Message } from '../shared/types';
 import { cn, formatTime } from '../lib/utils'; // Ensure utils exists or fix imports
 import { Bot, User, ShoppingCart } from 'lucide-react';
+import { renderRichText } from '../lib/rich-text';
 
 interface MessageBubbleProps {
     message: Message;
@@ -25,34 +26,9 @@ function requestAddToCart(sku: string) {
     } catch { /* parent unreachable */ }
 }
 
-const URL_SPLIT = /(https?:\/\/[^\s<>"')]+)/g;
-
-/** Turn raw URLs in message text into clickable links that navigate via the parent. */
-function linkify(text: string, isUser: boolean) {
-    if (!text) return text;
-    return text.split(URL_SPLIT).map((part, i) => {
-        if (/^https?:\/\//.test(part)) {
-            const trail = part.match(/[.,;:!?)]+$/)?.[0] ?? '';
-            const url = trail ? part.slice(0, part.length - trail.length) : part;
-            return (
-                <span key={i}>
-                    <a
-                        href={url}
-                        onClick={(e) => { e.preventDefault(); requestNavigate(url); }}
-                        className={cn(
-                            'font-semibold underline decoration-1 underline-offset-2 break-all cursor-pointer',
-                            isUser ? 'text-white' : 'text-red-600 hover:text-red-700'
-                        )}
-                    >
-                        {url}
-                    </a>
-                    {trail}
-                </span>
-            );
-        }
-        return <span key={i}>{part}</span>;
-    });
-}
+// Link handling moved into lib/rich-text.tsx, which also turns the agent's
+// WhatsApp markup (*bold*, • bullets) into real elements instead of showing the
+// asterisks to the customer.
 
 export function MessageBubble({ message }: MessageBubbleProps) {
     const isUser = message.sender === SenderType.USER;
@@ -99,12 +75,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                         </div>
                     )}
 
-                    <p className={cn(
-                        "whitespace-pre-wrap font-medium leading-relaxed tracking-tight",
+                    <div className={cn(
+                        "font-medium leading-relaxed tracking-tight",
                         isUser ? "text-white" : "text-(--c-text)"
                     )}>
-                        {linkify((message.payload as any).text, isUser)}
-                    </p>
+                        {renderRichText((message.payload as any).text, isUser, requestNavigate)}
+                    </div>
 
                     {/* Render Buttons if they exist in the payload */}
                     {(message.payload as any).buttons && (message.payload as any).buttons.length > 0 && (
