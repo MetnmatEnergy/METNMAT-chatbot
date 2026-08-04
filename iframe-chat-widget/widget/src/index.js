@@ -149,7 +149,7 @@
                     type: 'INIT_WIDGET',
                     siteKey: siteKey,
                     theme: getSiteTheme()
-                }, '*');
+                }, ORIGIN);
             } else {
                 iframeContainer.style.opacity = '0';
                 iframeContainer.style.transform = 'translateY(20px) scale(0.95)';
@@ -165,6 +165,20 @@
 
         // Listen for messages from the iframe
         window.addEventListener('message', (event) => {
+            // ORIGIN GATE — do not remove.
+            //
+            // This listener runs on the HOST site and acts on what it receives:
+            // NAVIGATE calls window.location.assign() with the supplied URL, and
+            // ADD_TO_CART dispatches into the site's cart. postMessage reaches
+            // window.parent from ANY embedded cross-origin frame, and the site
+            // embeds third-party frames (the footer map), so without this check a
+            // forced-redirect / phishing primitive was available to all of them.
+            //
+            // ORIGIN is the chat host, derived from this script's own src at the
+            // top of this file. The source check additionally pins the sender to
+            // OUR iframe rather than any same-origin frame.
+            if (event.origin !== ORIGIN) return;
+            if (!iframe.contentWindow || event.source !== iframe.contentWindow) return;
             if (!event.data) return;
             if (event.data.type === 'CLOSE_WIDGET') {
                 if (isOpen) toggleChat();
@@ -172,7 +186,7 @@
             // The chat UI announces when it has mounted — (re)send the site key + theme so
             // it can create its session and match the site, regardless of load order.
             if (event.data.type === 'WIDGET_READY') {
-                iframe.contentWindow.postMessage({ type: 'INIT_WIDGET', siteKey: siteKey, theme: getSiteTheme() }, '*');
+                iframe.contentWindow.postMessage({ type: 'INIT_WIDGET', siteKey: siteKey, theme: getSiteTheme() }, ORIGIN);
             }
             // Customer tapped "Add to cart" in chat → hand the SKU to the host site's
             // shop (ChatCartBridge listens for this event and updates the cart), then
@@ -183,7 +197,7 @@
                         detail: { sku: event.data.sku, qty: event.data.qty }
                     }));
                 } catch (e) {
-                    iframe.contentWindow.postMessage({ type: 'CART_RESULT', ok: false, error: 'cart unavailable here' }, '*');
+                    iframe.contentWindow.postMessage({ type: 'CART_RESULT', ok: false, error: 'cart unavailable here' }, ORIGIN);
                 }
             }
             // Customer tapped a link in chat → ALWAYS change the current page in the SAME
@@ -197,6 +211,13 @@
                 }
                 try {
                     const dest = new URL(url, window.location.href);
+                    // SCHEME ALLOW-LIST. `new URL('javascript:alert(1)')` parses
+                    // happily, its hostname is empty so it misses SITE_HOSTS, and
+                    // the old else-branch handed it to location.assign — script
+                    // execution in the host page's own origin. Only real network
+                    // schemes may navigate; tel:/mailto: were already handled.
+                    if (dest.protocol !== 'https:' && dest.protocol !== 'http:') return;
+
                     // The bot links to the canonical metnmat.com domain. Rewrite those to the
                     // CURRENT host so navigation works on localhost AND production (same tab).
                     const SITE_HOSTS = ['metnmat.com', 'www.metnmat.com'];
@@ -206,7 +227,9 @@
                         window.location.assign(dest.href);
                     }
                 } catch (e) {
-                    window.location.assign(url);
+                    // Unparseable input is dropped. The old fallback passed the raw
+                    // string straight to location.assign, which re-opened exactly
+                    // the hole the allow-list above closes.
                 }
             }
         });
@@ -214,7 +237,7 @@
         // Site cart confirms (or rejects) a chat-initiated add → relay into the chat.
         window.addEventListener('metnmat:cart-result', (event) => {
             const d = (event && event.detail) || {};
-            iframe.contentWindow.postMessage({ type: 'CART_RESULT', ok: !!d.ok, name: d.name, sku: d.sku, error: d.error }, '*');
+            iframe.contentWindow.postMessage({ type: 'CART_RESULT', ok: !!d.ok, name: d.name, sku: d.sku, error: d.error }, ORIGIN);
         });
 
         // Keep the chat panel in sync with the host site's dark/light theme.
@@ -224,7 +247,7 @@
                 const theme = getSiteTheme();
                 iframeContainer.style.backgroundColor = theme === 'dark' ? '#16181d' : '#fff';
                 if (iframe.contentWindow) {
-                    iframe.contentWindow.postMessage({ type: 'THEME_CHANGE', theme: theme }, '*');
+                    iframe.contentWindow.postMessage({ type: 'THEME_CHANGE', theme: theme }, ORIGIN);
                 }
             });
             themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });

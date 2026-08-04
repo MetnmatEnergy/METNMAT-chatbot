@@ -4,6 +4,16 @@ import { SenderType, MessageType, type Message } from '../shared/types';
 // Hosted on same server, so use relative path
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+/**
+ * Optional allow-list for the embedding page's origin, e.g.
+ * VITE_ALLOWED_PARENT_ORIGIN=https://www.metnmat.com
+ *
+ * Left unset the UI still pins inbound postMessage to window.parent, which is
+ * what stops an arbitrary third window driving it. Set it in the deploy env to
+ * additionally pin the host, so the widget only answers the site it is for.
+ */
+const ALLOWED_PARENT_ORIGIN = import.meta.env.VITE_ALLOWED_PARENT_ORIGIN || '';
+
 type Session = { token: string; conversationId: string };
 type Stored = { current: Session | null; previous: Session | null };
 
@@ -59,6 +69,18 @@ export function useChat() {
     // 1. Listen for INIT + theme from the parent; announce readiness.
     useEffect(() => {
         const handler = (event: MessageEvent) => {
+            // Only the embedding page may drive this UI. Without the source
+            // check any window able to reach this frame could set the siteKey
+            // (which scopes the whole session) or push a CART_RESULT, and
+            // CART_RESULT appends a message to the transcript — so an unchecked
+            // sender could put words in the assistant's mouth.
+            //
+            // The parent's origin is not known at build time (the widget is
+            // embeddable on any approved host), so the sender is pinned to
+            // window.parent rather than to a fixed origin. ALLOWED_PARENT_ORIGIN
+            // narrows it further when configured.
+            if (event.source !== window.parent) return;
+            if (ALLOWED_PARENT_ORIGIN && event.origin !== ALLOWED_PARENT_ORIGIN) return;
             if (event.data?.type === 'INIT_WIDGET' && event.data?.siteKey) {
                 setSiteKey(event.data.siteKey);
             }
