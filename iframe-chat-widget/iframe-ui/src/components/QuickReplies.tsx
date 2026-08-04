@@ -7,7 +7,10 @@ const FOLLOWUPS = [
     { label: 'Talk to an engineer', q: 'I would like to talk to an engineer' },
 ];
 
-export function QuickReplies({ onSelect }: { onSelect: (text: string) => void }) {
+// `disabled` while a send is in flight: these chips called sendMessage directly with
+// no guard, and tapping two fired two agent pipelines whose optimistic bubbles
+// then deleted each other.
+export function QuickReplies({ onSelect, disabled }: { onSelect: (text: string) => void; disabled?: boolean }) {
     return (
         <div
             className="px-4 pt-2.5 pb-0.5 flex gap-2 overflow-x-auto"
@@ -17,6 +20,7 @@ export function QuickReplies({ onSelect }: { onSelect: (text: string) => void })
                 <button
                     key={i}
                     onClick={() => onSelect(f.q)}
+                    disabled={disabled}
                     className="flex-shrink-0 whitespace-nowrap text-xs font-semibold px-3 py-1.5 rounded-full border border-(--c-border) bg-(--c-surface) text-(--c-text-muted) hover:border-red-400 hover:text-red-600 transition-colors"
                 >
                     {f.label}

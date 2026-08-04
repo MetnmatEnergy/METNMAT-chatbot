@@ -35,6 +35,17 @@ export interface ButtonsPayload {
 
 export type MessagePayload = TextPayload | ImagePayload | ButtonsPayload;
 
+/**
+ * Delivery state of a message the user sent. Absent on anything the server
+ * returned — those are delivered by definition.
+ *
+ * 'failed' exists so a send that did not land stays on screen with its text
+ * intact and a way to retry. Previously a failed send deleted the bubble, and
+ * the composer had already been cleared, so the customer's typing was simply
+ * gone with no error shown.
+ */
+export type DeliveryStatus = 'sending' | 'failed';
+
 export interface Message {
     id: string;
     conversationId: string;
@@ -42,6 +53,7 @@ export interface Message {
     type: MessageType;
     payload: MessagePayload;
     createdAt: string; // ISO8601
+    status?: DeliveryStatus;
 }
 
 export interface Visitor {

@@ -7,6 +7,8 @@ import { renderRichText } from '../lib/rich-text';
 interface MessageBubbleProps {
     message: Message;
     isLast?: boolean; // Optional if not used logic-wise yet
+    /** Re-send a message whose delivery failed. Omitted for agent messages. */
+    onRetry?: (id: string) => void;
 }
 
 /** Ask the parent page (widget loader) to change the page — always in the SAME tab. */
@@ -30,7 +32,7 @@ function requestAddToCart(sku: string) {
 // WhatsApp markup (*bold*, • bullets) into real elements instead of showing the
 // asterisks to the customer.
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
     const isUser = message.sender === SenderType.USER;
 
     return (
@@ -117,7 +119,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 {/* Time */}
                 <span className="text-[10px] text-(--c-text-faint) mt-1.5 px-1 font-semibold opacity-70 flex items-center gap-1 uppercase tracking-tighter">
                     {formatTime(message.createdAt)}
-                    {isUser && <span className="text-red-500 font-bold">• Sent</span>}
+                    {/* "Sent" used to be shown for every user message regardless of
+                        what happened, including ones that never reached the server. */}
+                    {isUser && message.status === 'sending' && <span className="font-bold">• Sending</span>}
+                    {isUser && message.status === 'failed' && (
+                        <>
+                            <span className="text-red-600 font-bold">• Not sent</span>
+                            {onRetry && (
+                                <button
+                                    onClick={() => onRetry(message.id)}
+                                    className="font-bold text-red-600 underline underline-offset-2 hover:text-red-700 normal-case tracking-normal"
+                                >
+                                    Retry
+                                </button>
+                            )}
+                        </>
+                    )}
+                    {isUser && !message.status && <span className="text-red-500 font-bold">• Sent</span>}
                 </span>
             </div>
         </motion.div>

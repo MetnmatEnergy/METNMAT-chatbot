@@ -88,6 +88,19 @@ const ConversationMessageSchema =
     );
 
 
+/**
+ * buildContext() runs on EVERY inbound message, on every channel:
+ *   find({ "user.phone": { $in: variants }, createdAt: { $gte: sessionStart } })
+ *     .sort({ createdAt: -1 }).limit(CONTEXT_MESSAGE_LIMIT)
+ * (src/lib/utils.ts:32-38). With no index that was a full scan of the whole
+ * conversation history to assemble the context for a single reply — the cost
+ * growing with every message ever sent.
+ *
+ * Field order matters: the equality-ish $in comes first, the range and sort
+ * field second, so one index satisfies the match, the range and the sort.
+ */
+ConversationMessageSchema.index({ "user.phone": 1, createdAt: -1 });
+
 export const createConversationMessage = async (message: ConversationMessage) => {
     const newMessage = new ConversationMessageModel(message);
     await newMessage.save();

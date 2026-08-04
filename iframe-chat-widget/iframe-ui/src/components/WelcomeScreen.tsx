@@ -9,7 +9,7 @@ const SUGGESTIONS = [
     { icon: Headphones, label: 'Talk to our team', query: 'How can I contact your sales team?' },
 ];
 
-export function WelcomeScreen({ onSelect }: { onSelect: (text: string) => void }) {
+export function WelcomeScreen({ onSelect, disabled }: { onSelect: (text: string) => void; disabled?: boolean }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -39,6 +39,7 @@ export function WelcomeScreen({ onSelect }: { onSelect: (text: string) => void }
                             whileHover={{ x: 2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => onSelect(s.query)}
+                            disabled={disabled}
                             className="group flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-xl border border-(--c-border) bg-(--c-surface) hover:border-red-400/70 text-(--c-text) text-sm font-medium transition-all shadow-sm"
                         >
                             <span className="flex-shrink-0 w-8 h-8 rounded-lg bg-(--c-surface-2) group-hover:bg-red-600 group-hover:text-white text-red-600 flex items-center justify-center transition-colors">

@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useChat } from './hooks/useChat';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageBubble } from './components/MessageBubble';
@@ -13,13 +13,59 @@ function App() {
   const {
     messages, sendMessage, isLoading, isConnected, isSending,
     viewingPrevious, hasPrevious, newChat, viewPrevious, backToCurrent,
+    sessionFailed, retrySession, retryMessage,
   } = useChat();
   const endRef = useRef<HTMLDivElement>(null);
+  const [confirmNewChat, setConfirmNewChat] = useState(false);
+
+  /**
+   * newChat is destructive — the rolling-2 model overwrites the previous chat.
+   * It declines (returns false) when there is a previous chat to lose, so ask
+   * first rather than silently discarding a transcript the customer may be
+   * using as a selection record. It also declines on an empty current chat,
+   * where "new chat" would achieve nothing but cost them the previous one.
+   */
+  const handleNewChat = async () => {
+    const started = await newChat();
+    if (!started && hasPrevious && messages.length > 0) setConfirmNewChat(true);
+  };
 
   // Auto-scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, isSending]);
+
+  // The session could not be created — a 429 from the 20/min limiter, a cold
+  // start, or no network. This used to be indistinguishable from "still
+  // loading", so the widget showed a spinner forever, with no header and so no
+  // way to close it from inside.
+  if (sessionFailed) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-(--c-app) p-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm font-semibold text-(--c-text)">Chat is unavailable right now</p>
+          <p className="text-xs text-(--c-text-muted) max-w-xs">
+            We couldn&apos;t start a conversation. Please try again — or email{' '}
+            <span className="font-medium">contact@metnmat.com</span>.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={retrySession}
+              className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => window.parent.postMessage({ type: 'CLOSE_WIDGET' }, '*')}
+              className="rounded-lg border border-(--c-border) px-4 py-2 text-xs font-semibold text-(--c-text-muted) hover:text-(--c-text)"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -36,8 +82,30 @@ function App() {
     <div className="flex flex-col h-screen bg-(--c-app) overflow-hidden font-sans selection:bg-red-100 selection:text-red-900">
       <ChatHeader
         onClose={() => window.parent.postMessage({ type: 'CLOSE_WIDGET' }, '*')}
-        onNewChat={newChat}
+        onNewChat={handleNewChat}
       />
+
+      {confirmNewChat && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-(--c-surface-2) border-b border-(--c-border)">
+          <span className="text-[11px] font-semibold text-(--c-text-muted)">
+            Starting a new chat will discard your previous one.
+          </span>
+          <span className="flex shrink-0 gap-2">
+            <button
+              onClick={async () => { setConfirmNewChat(false); await newChat({ force: true }); }}
+              className="text-[11px] font-bold text-red-600 hover:text-red-700"
+            >
+              Discard &amp; start
+            </button>
+            <button
+              onClick={() => setConfirmNewChat(false)}
+              className="text-[11px] font-semibold text-(--c-text-muted) hover:text-(--c-text)"
+            >
+              Keep
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Previous-chat controls (rolling 2-session model) */}
       {viewingPrevious ? (
@@ -69,7 +137,7 @@ function App() {
 
       <main className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
         {messages.length === 0 && !viewingPrevious ? (
-          <WelcomeScreen onSelect={sendMessage} />
+          <WelcomeScreen onSelect={sendMessage} disabled={isSending} />
         ) : messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-center px-8">
             <p className="text-(--c-text-muted) text-xs">This chat has no messages.</p>
@@ -77,9 +145,10 @@ function App() {
         ) : (
           messages.map((msg, i) => (
             <MessageBubble
-              key={i}
+              key={msg.id || i}
               message={msg}
               isLast={i === messages.length - 1}
+              onRetry={retryMessage}
             />
           ))
         )}
@@ -92,11 +161,17 @@ function App() {
       {viewingPrevious ? (
         <div className="px-4 py-3 bg-(--c-surface) border-t border-(--c-border) text-center text-xs text-(--c-text-muted) font-medium">
           You're viewing a past conversation.{' '}
-          <button onClick={newChat} className="text-red-600 font-bold hover:text-red-700">Start a new chat</button> to send a message.
+          {/* Back to current, not "new chat". The old wording offered the one
+              destructive option while the visitor was reading the very chat it
+              would discard. */}
+          <button onClick={backToCurrent} className="text-red-600 font-bold hover:text-red-700">
+            Back to your current chat
+          </button>{' '}
+          to send a message.
         </div>
       ) : (
         <>
-          {messages.length > 0 && <QuickReplies onSelect={sendMessage} />}
+          {messages.length > 0 && <QuickReplies onSelect={sendMessage} disabled={isSending} />}
           <ChatInput onSend={sendMessage} />
         </>
       )}
