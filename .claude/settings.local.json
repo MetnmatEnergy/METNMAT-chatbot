@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:/Users/ritik/OneDrive/Desktop\" -maxdepth 4 -name \"launch.json\" -path \"*.claude*\" 2>/dev/null)",
+      "Bash(bun --version)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://localhost:3002/health)",
+      "Bash(echo \"health: $\\(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://localhost:3002/health\\)\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://localhost:3002/widget.js)",
+      "Bash(echo \"widget: $\\(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://localhost:3002/widget.js\\)\")",
+      "Bash(grep -rl \"Request a quote\" --include=*.tsx --include=*.ts src)",
+      "Bash(grep -rl \"Add to cart\" --include=*.tsx --include=*.ts src)",
+      "Bash(rm -rf .next)",
+      "Bash(npx next *)"
+    ]
+  }
+}

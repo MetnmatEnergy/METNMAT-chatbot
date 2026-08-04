@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Metnmat Chat Widget — Live Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(160deg, #f0f9ff 0%, #ecfdf5 50%, #fff 100%);
+      color: #0f172a;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 120px; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    p { line-height: 1.6; color: #475569; }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 24px;
+      box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+    }
+    h2 { font-size: 1rem; margin: 0 0 12px; }
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .hint {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: #eff6ff;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #1e40af;
+    }
+    a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Metnmat Chat Widget</h1>
+    <p>
+      This page loads the same embed script you will add to
+      <a href="https://www.metnmat.com/" target="_blank" rel="noopener">metnmat.com</a>.
+      Click the blue chat button in the bottom-right corner to test product search and support.
+    </p>
+
+    <div class="card">
+      <h2>Add to your website (before &lt;/body&gt;)</h2>
+      <pre id="embed-code">&lt;script src="CHATBOT_URL/widget.js" data-site-key="metnmat-main"&gt;&lt;/script&gt;</pre>
+      <div class="hint">
+        Replace <strong>CHATBOT_URL</strong> with your deployed server URL (HTTPS).
+        After deploy, open <a href="/integrate">/integrate</a> for a copy-ready snippet.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var origin = window.location.origin;
+      var code = document.getElementById('embed-code');
+      if (code) {
+        code.textContent = '<script src="' + origin + '/widget.js" data-site-key="metnmat-main"><\/script>';
+      }
+    })();
+  </script>
+  <script src="/widget.js" data-site-key="metnmat-main"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: connect repo → Render reads this file → set env vars in dashboard
+services:
+  - type: web
+    name: metnmat-chatbot
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: Meta_WA_accessToken
+        sync: false
+      - key: Meta_WA_SenderPhoneNumberId
+        sync: false
+      - key: Meta_WA_wabaId
+        sync: false
+      - key: Meta_WA_VerfyToken
+        sync: false
+      - key: PORT
+        value: "3001"
+      - key: PUBLIC_URL
+        sync: false

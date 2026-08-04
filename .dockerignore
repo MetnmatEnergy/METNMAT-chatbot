@@ -1,0 +1,16 @@
+node_modules
+.git
+# Secrets — must NEVER enter a build layer. A local `docker build .` is not
+# protected by .gcloudignore, so COPY . . would otherwise bake these in.
+.env
+.env.*
+deploy/
+*-key.json
+*.pem
+*.log
+iframe-chat-widget/widget/node_modules
+iframe-chat-widget/iframe-ui/node_modules
+mastra.db
+mastra.db-*
+dist
+logs

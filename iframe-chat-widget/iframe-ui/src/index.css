@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --primary: #d81f26;
+  --primary-dark: #b3171d;
+  --primary-light: #e84e54;
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --premium-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --button-shadow: 0 10px 15px -3px rgba(216, 31, 38, 0.25);
+  /* Themeable surface tokens — flipped by the .dark class (synced from the site). */
+  --c-app: #f8fafc;
+  --c-surface: #ffffff;
+  --c-surface-2: #f8fafc;
+  --c-text: #0f172a;
+  --c-text-muted: #64748b;
+  --c-text-faint: #94a3b8;
+  --c-border: #eef1f5;
+}
+
+.dark {
+  --text-main: #eef1f4;
+  --text-muted: #9ca0a6;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 0, 0, 0.35);
+  --c-app: #0a0a10;
+  --c-surface: #16181d;
+  --c-surface-2: #0f1117;
+  --c-text: #eef1f4;
+  --c-text-muted: #9ca0a6;
+  --c-text-faint: #6b7076;
+  --c-border: rgba(255, 255, 255, 0.10);
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--c-app);
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}

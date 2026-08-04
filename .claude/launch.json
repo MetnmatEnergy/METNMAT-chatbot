@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "metnmat-dashboard-prod",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\ritik\\OneDrive\\Desktop\\METNMAT\\start-dashboard.cjs"],
+      "port": 3001
+    },
+    {
+      "name": "metnmat-dashboard-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\ritik\\OneDrive\\Desktop\\METNMAT\\start-dashboard-dev.cjs"],
+      "port": 3001
+    },
+    {
+      "name": "metnmat-website-prod",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\ritik\\OneDrive\\Desktop\\METNMAT\\start-website.cjs"],
+      "port": 3000
+    },
+    {
+      "name": "metnmat-chatbot",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\ritik\\OneDrive\\Desktop\\METNMAT\\start-chatbot.cjs"],
+      "port": 3002
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "metnmat_customer_agent",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts",
+    "build": "bun build index.ts --target=node --outfile dist/index.js",
+    "start:prod": "bun run dist/index.js",
+    "build:widget": "cd iframe-chat-widget/widget && npm install && npm run build && cd ../iframe-ui && npm install && npm run build",
+    "parse:products": "bun run scripts/parse-metnmat-excel.ts",
+    "seed:products": "bun run scripts/seed-products.ts",
+    "reseed:products": "bun run scripts/reseed-products.ts",
+    "setup": "bun run parse:products && bun run build:widget",
+    "setup:full": "bun run parse:products && bun run seed:products && bun run build:widget"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mastra/core": "^1.0.4",
+    "@mastra/express": "^1.0.1",
+    "@mastra/libsql": "^1.0.0",
+    "@mastra/loggers": "^1.0.0",
+    "@mastra/memory": "^1.0.0",
+    "@mastra/observability": "^1.0.0",
+    "@mastra/pinecone": "^1.0.0",
+    "@mastra/rag": "^2.0.0",
+    "axios": "^1.13.2",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "franc": "^6.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mastra": "^1.0.1",
+    "mongoose": "^9.1.5",
+    "openai": "^6.16.0",
+    "socket.io": "^4.8.3",
+    "whatsappcloudapi_wrapper": "^1.0.16",
+    "winston": "^3.19.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4"
+  }
+}

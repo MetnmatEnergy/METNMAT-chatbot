@@ -1,0 +1,11 @@
+# What NOT to upload to Cloud Build (keeps the upload small + secrets out).
+.git/
+*.log
+**/node_modules/
+node_modules/
+deploy/node_modules/
+deploy/secrets.env
+.claude/
+.env
+**/.env.local
+*.supabase.bak
