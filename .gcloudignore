@@ -1,6 +1,9 @@
 # What NOT to upload to Cloud Build (keeps the upload small + secrets out).
 .git/
 *.log
+# Build artefacts are produced INSIDE the image now (see Dockerfile stage 1).
+# Uploading them was the only reason production ever had a UI.
+**/dist/
 **/node_modules/
 node_modules/
 deploy/node_modules/

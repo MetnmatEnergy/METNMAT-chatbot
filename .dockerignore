@@ -12,5 +12,8 @@ iframe-chat-widget/widget/node_modules
 iframe-chat-widget/iframe-ui/node_modules
 mastra.db
 mastra.db-*
+# Any dist, at any depth. Stage 1 of the Dockerfile builds the UI bundles;
+# letting a stale local build into the context risks shipping it by accident.
+**/dist
 dist
 logs
