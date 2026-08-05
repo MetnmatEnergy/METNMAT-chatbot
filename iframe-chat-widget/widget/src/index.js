@@ -24,13 +24,16 @@
     const ICON_CLOSE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
 
     // Read the host site's dark/light theme so the chat panel can match it.
-    // Metnmat's site sets a 'dark'/'light' class on <html> (default dark) + mm-theme.
+    //
+    // The site is LIGHT by default and adds a `dark` class to <html> only when
+    // the visitor has chosen it (mm-theme === 'dark'). There is no `light`
+    // class any more — :root carries the light values — so the old
+    // "no class, no stored value -> dark" fallback would have rendered a dark
+    // chat panel on a light page.
     function getSiteTheme() {
         try {
-            const el = document.documentElement;
-            if (el.classList.contains('light')) return 'light';
-            if (el.classList.contains('dark')) return 'dark';
-            return localStorage.getItem('mm-theme') === 'light' ? 'light' : 'dark';
+            if (document.documentElement.classList.contains('dark')) return 'dark';
+            return localStorage.getItem('mm-theme') === 'dark' ? 'dark' : 'light';
         } catch (e) {
             return 'light';
         }
