@@ -1,10 +1,12 @@
-/** Groq models via Mastra model router (requires GROQ_API_KEY). */
+/** OpenAI models via the Mastra model router (requires OPENAI_API_KEY). */
 export const LLM_MODELS = {
-  // 70b-versatile is the default: 8b-instant does NOT support native json_schema
-  // structured output and frequently emits malformed tool calls, which breaks the
-  // product-retriever (shopping companion) flows. 70b handles both reliably.
-  // Free-tier caveat: 70b has a 100k tokens/DAY cap — upgrade Groq before launch.
-  primary: "groq/llama-3.3-70b-versatile",
-  heavy: "groq/llama-3.3-70b-versatile",
-  fast: "groq/llama-3.1-8b-instant",
+  // Structured output is the binding constraint, not raw quality. The
+  // product-retriever (shopping companion) flows depend on native json_schema
+  // support: the previous fast model, groq/llama-3.1-8b-instant, did NOT support
+  // it and emitted malformed tool calls, which broke those flows. Both models
+  // below support structured outputs, so `fast` is now safe to use in the same
+  // paths as `primary` — which was not true before.
+  primary: "openai/gpt-4o",
+  heavy: "openai/gpt-4o",
+  fast: "openai/gpt-4o-mini",
 } as const;

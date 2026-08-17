@@ -61,7 +61,7 @@ module.exports = {
         // What the server cannot start without. Checked by with-secrets.sh
         // before bun is exec'd, so a missing value is one clear line instead of
         // a crash loop.
-        REQUIRED_SECRETS: "MONGODB_URI GROQ_API_KEY PINECONE_API_KEY AGENT_API_KEY JWT_SECRET",
+        REQUIRED_SECRETS: "MONGODB_URI OPENAI_API_KEY PINECONE_API_KEY AGENT_API_KEY JWT_SECRET",
 
         // Public origin, used to build the widget/iframe URLs the host site
         // loads. Wrong here means the widget requests assets from the wrong

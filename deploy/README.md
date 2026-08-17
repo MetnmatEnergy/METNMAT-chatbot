@@ -43,13 +43,14 @@ package manager, or the other three apps. Uninstalling is `rm -rf ~/.bun`.
 
 ## One-time setup
 
-**1. Create a GitHub repository and push.** The repo is currently local-only
-(`master`, no remote), and GitHub Actions cannot run without one.
+**1. GitHub repository — done.** `MetnmatEnergy/METNMAT-chatbot`, default branch
+`main`, workflow registered and active.
 
-```bash
-git remote add origin git@github.com:MetnmatEnergy/metnmat-customer-agent.git
-git push -u origin master
-```
+⚠ It is **public**. No credentials are exposed — `.env` is gitignored and has
+never been committed, and Actions secrets are not readable from repository
+contents — but this publishes the agent's prompts, tool definitions and
+`metnmat-products.json`. Worth a deliberate decision rather than a default:
+Settings → General → Change visibility.
 
 **2. Install Bun on the instance,** as `ec2-user`:
 
@@ -70,11 +71,17 @@ These are per-repository; setting them on METNMAT-WEBSITE does not share them.
 | Variable | `EC2_INSTANCE_ID` | `i-0b7f49ca3e9852d4b` |
 | Variable | `ARTIFACT_BUCKET` | `metnmat-deploy-artifacts-976134557584` |
 
-**4. Grant the instance role read access to this app's secrets.** The instance
-profile is `metnmat-dashboard-profile` → role `metnmat-dashboard-role`. Its
-existing inline policy covers `metnmat/prod/*` only, so add
-`metnmat/chatbot/*` — `secretsmanager:GetSecretValue` and `DescribeSecret`.
-Without it `with-secrets.sh` fails closed and the app never starts.
+**4. Instance role — done and verified.** `metnmat/chatbot/*` was added as its
+own statement in `METNMAT-WEBSITE/deploy/aws/instance-role-policy.json` and
+applied to `metnmat-dashboard-role`. Confirmed from the instance itself:
+
+```
+✓ instance role can read metnmat/chatbot/*
+```
+
+If that ever regresses, re-apply with **Bootstrap EC2 → `fix_instance_role: true`**
+in the METNMAT-WEBSITE repo. Without it `with-secrets.sh` fails on a *permission*
+error, which reads like a missing secret and sends you to the wrong place.
 
 **5. Create the secrets** under `metnmat/chatbot/` in `ap-south-1`.
 
@@ -90,7 +97,7 @@ Payload version collections from exactly that mistake.
 | Secret | Notes |
 |---|---|
 | `MONGODB_URI` | ⚠ ends `/metnmat` — **not** `metnmat_cms`, which is the CMS's |
-| `GROQ_API_KEY` | required — the agent will not start without it |
+| `OPENAI_API_KEY` | required — serves both the chat models and the embeddings |
 | `PINECONE_API_KEY` | required |
 | `PINECONE_INDEX_NAME`, `PINECONE_NAMESPACE` | |
 | `AGENT_API_KEY` | required — authenticates callers to the agent API |

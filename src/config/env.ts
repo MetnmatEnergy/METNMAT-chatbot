@@ -10,8 +10,12 @@ export const config = {
         indexName: process.env.PINECONE_INDEX_NAME!,
         namespace: process.env.PINECONE_NAMESPACE!,
     },
-    groq: {
-        apiKey: process.env.GROQ_API_KEY!,
+    // OpenAI serves both the chat models and the embeddings. Before this it was
+    // split: the LLM ran on Groq while embeddings already used
+    // openai/text-embedding-3-small, so the deployment needed two provider keys
+    // and embedding-model.ts checked the wrong one.
+    openai: {
+        apiKey: process.env.OPENAI_API_KEY!,
     },
     app: {
         port: process.env.PORT || 3001,
@@ -67,7 +71,7 @@ export function assertConfig(): void {
     if (!process.env.ALLOWED_ORIGINS || !process.env.ALLOWED_ORIGINS.trim())
         problems.push("ALLOWED_ORIGINS (explicit origins, not '*')");
     if (!process.env.MONGODB_URI) problems.push("MONGODB_URI");
-    if (!process.env.GROQ_API_KEY) problems.push("GROQ_API_KEY");
+    if (!process.env.OPENAI_API_KEY) problems.push("OPENAI_API_KEY");
     if (problems.length)
         throw new Error(`[config] Missing/insecure required env in production: ${problems.join(", ")}`);
 }

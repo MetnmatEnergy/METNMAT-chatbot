@@ -5,9 +5,13 @@ import { config } from "../config/env";
 let embeddingModel: ModelRouterEmbeddingModel | undefined
 
 export function getEmbeddingModel() {
-  if (!config.groq.apiKey) {
+  // Was gated on config.groq.apiKey while instantiating an OPENAI embedding
+  // model — so with a Groq key and no OpenAI key this passed the check and then
+  // failed inside the router. Its own message said "Set OPENAI_API_KEY", which
+  // is the key it always actually needed.
+  if (!config.openai.apiKey) {
     throw new Error(
-      "[embeddingModel] Embeddings are not configured for Groq. Set OPENAI_API_KEY if you enable vector search."
+      "[embeddingModel] OPENAI_API_KEY is not set — required for vector search embeddings."
     )
   }
 
