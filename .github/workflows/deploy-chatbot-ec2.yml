@@ -1,0 +1,251 @@
+name: Deploy chatbot to EC2
+
+# Builds the customer-agent and releases it to the SHARED METNMAT EC2, alongside
+# the website (3100), the Payload CMS (3200) and the internal command-center
+# dashboard (3000). This app takes 3002.
+#
+# Same shape as the website and CMS pipelines in the METNMAT-WEBSITE repo —
+# build on a runner, artifact to private S3, release over SSM, reload one named
+# pm2 process, health check, roll back on failure. Deliberately the same, so one
+# operator can reason about all three.
+#
+# Two things differ, both forced by this app rather than chosen:
+#
+#   Bun runtime. The Dockerfile is oven/bun:1.3 with `bun run index.ts`, and
+#   that is how it ran on Cloud Run. A Node bundle was tested and fails —
+#   @mastra/libsql needs a native binding that cannot be inlined, so the bundle
+#   dies on `Cannot find module '@libsql/linux-x64-gnu'`.
+#
+#   Two-stage build. The widget bundles are npm/vite native and build under
+#   Node; the server runs under Bun. Both are needed in the artifact: the server
+#   serves /widget.js out of iframe-chat-widget/widget/dist.
+#
+# Manual only. This is the public chat surface on a box already serving three
+# other applications.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit to deploy (blank = HEAD)"
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-chatbot-ec2
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  ARTIFACT_PREFIX: chatbot
+  ARTIFACT_NAME: chatbot-build.tgz
+  APP_NAME: metnmat-chatbot
+  APP_ROOT: /home/ec2-user/chat
+  APP_PORT: "3002"
+  # Same instance and bucket as the website and CMS. Set these as repository
+  # VARIABLES here too — they are not secrets, just identifiers.
+  EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || 'i-0b7f49ca3e9852d4b' }}
+  ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET || 'metnmat-deploy-artifacts-976134557584' }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.guard.outputs.auth }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Check AWS is configured
+        id: guard
+        run: |
+          auth=""
+          if [ -n "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" ]; then
+            auth="oidc"
+          elif [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ] && [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            auth="keys"
+          fi
+          [ -n "$auth" ] || { echo "::error::No AWS credentials configured in THIS repository's settings."; exit 1; }
+          echo "auth=$auth" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Resolve deploy SHA
+        id: resolve
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      # Node as well as Bun: the widget bundles use vite and microbundle, which
+      # are npm-native. This mirrors the Dockerfile's two stages.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install server dependencies
+        # Not --production: the widget build needs devDependencies. The artifact
+        # is pruned to production deps in the assemble step instead.
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Build the widget bundles
+        run: bun run build:widget
+
+      - name: Assemble release
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/chat-release"
+          rm -rf "$OUT"; mkdir -p "$OUT"
+
+          # The server runs TypeScript directly under Bun, so the SOURCE ships —
+          # there is no compile step for it.
+          cp -r index.ts src package.json tsconfig.json bun.lock "$OUT/" 2>/dev/null || true
+          [ -d public ] && cp -r public "$OUT/public"
+
+          # Built widget assets. server.ts resolves these relative to src/, so
+          # the directory layout has to be preserved exactly.
+          mkdir -p "$OUT/iframe-chat-widget/widget" "$OUT/iframe-chat-widget/iframe-ui"
+          cp -r iframe-chat-widget/widget/dist    "$OUT/iframe-chat-widget/widget/dist"
+          cp -r iframe-chat-widget/iframe-ui/dist "$OUT/iframe-chat-widget/iframe-ui/dist"
+          [ -d iframe-chat-widget/shared ] && cp -r iframe-chat-widget/shared "$OUT/iframe-chat-widget/shared"
+
+          # Production dependencies, installed on LINUX so @libsql gets its
+          # linux-x64-gnu binding rather than the runner-host mismatch that
+          # makes this app fail to start at all.
+          ( cd "$OUT" && bun install --production --frozen-lockfile || bun install --production )
+
+          # Runtime config travels inside the artifact so what is on the box can
+          # never drift from the code it runs.
+          mkdir -p "$OUT/_deploy"
+          cp deploy/pm2/ecosystem.config.cjs "$OUT/_deploy/"
+          cp deploy/bin/with-secrets.sh       "$OUT/_deploy/"
+
+          # Completeness marker, written LAST. release.sh refuses to swap without
+          # it, which is what makes a truncated upload fail safely instead of
+          # deploying half an app. This app has no BUILD_ID of its own.
+          echo "${{ steps.resolve.outputs.sha }}" > "$OUT/RELEASE_ID"
+
+          # Assert on the runner, where the tree is in front of you.
+          [ -f "$OUT/index.ts" ]                                        || { echo "::error::index.ts missing"; exit 1; }
+          [ -f "$OUT/iframe-chat-widget/widget/dist/widget.js" ]         || { echo "::error::widget.js missing — the host site loads this"; exit 1; }
+          [ -d "$OUT/node_modules/@mastra/core" ]                        || { echo "::error::@mastra/core missing"; exit 1; }
+          ls "$OUT/node_modules/@libsql" >/dev/null 2>&1                 || { echo "::error::@libsql native package missing — the server cannot start"; exit 1; }
+
+          tar -czf "${{ env.ARTIFACT_NAME }}" -C "$OUT" .
+          echo "artifact: $(du -h "${{ env.ARTIFACT_NAME }}" | cut -f1)"
+
+      - name: Assume AWS role (OIDC)
+        if: steps.guard.outputs.auth == 'oidc'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-chatbot-${{ github.run_id }}
+          aws-region: ap-south-1
+
+      - name: Configure AWS credentials (bootstrap keys)
+        if: steps.guard.outputs.auth == 'keys'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Upload artifact and release script
+        run: |
+          set -euo pipefail
+          DEST="s3://${{ env.ARTIFACT_BUCKET }}/${{ env.ARTIFACT_PREFIX }}/${{ steps.resolve.outputs.sha }}"
+          aws s3 cp "${{ env.ARTIFACT_NAME }}" "$DEST/${{ env.ARTIFACT_NAME }}" --only-show-errors
+          aws s3 cp deploy/bin/release.sh      "$DEST/release.sh"               --only-show-errors
+          echo "uploaded to $DEST"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assume AWS role (OIDC)
+        if: needs.build.outputs.auth == 'oidc'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-chatbot-deploy-${{ github.run_id }}
+          aws-region: ap-south-1
+
+      - name: Configure AWS credentials (bootstrap keys)
+        if: needs.build.outputs.auth == 'keys'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Release via SSM
+        env:
+          SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          set -euo pipefail
+          I="${{ env.EC2_INSTANCE_ID }}"
+
+          # Built with echoes, never a here-doc: a here-doc body must start at
+          # column 0, and column 0 ends the YAML block scalar this lives in.
+          {
+            echo "set -euo pipefail"
+            echo "export PATH=/home/ec2-user/.bun/bin:\$PATH"
+            echo "command -v bun >/dev/null || { echo 'FATAL: bun is not installed for ec2-user. See deploy/README.md.'; exit 1; }"
+            echo "export ARTIFACT_BUCKET='${{ env.ARTIFACT_BUCKET }}'"
+            echo "export ARTIFACT_PREFIX='${{ env.ARTIFACT_PREFIX }}'"
+            echo "export ARTIFACT_NAME='${{ env.ARTIFACT_NAME }}'"
+            echo "export APP_NAME='${{ env.APP_NAME }}'"
+            echo "export APP_ROOT='${{ env.APP_ROOT }}'"
+            echo "export APP_PORT='${{ env.APP_PORT }}'"
+            echo "export HEALTH_PATH='/'"
+            echo "export HEALTH_HOST='chat.metnmat.com'"
+            echo "export HEALTH_OK_CODES='200 302 307'"
+            echo "export HEALTH_TIMEOUT='150'"
+            echo "export BUILD_ID_PATH='RELEASE_ID'"
+            echo "export APP_ENTRY_PATH='index.ts'"
+            echo "mkdir -p ${{ env.APP_ROOT }}/releases ${{ env.APP_ROOT }}/logs ${{ env.APP_ROOT }}/bin"
+            echo "aws s3 cp s3://${{ env.ARTIFACT_BUCKET }}/${{ env.ARTIFACT_PREFIX }}/$SHA/release.sh /tmp/release-chat.sh --only-show-errors"
+            echo "bash /tmp/release-chat.sh $SHA"
+          } > remote.sh
+          echo "--- remote script ---"; cat remote.sh
+          B64="$(base64 -w0 < remote.sh)"
+
+          CMD=$(aws ssm send-command --instance-ids "$I" \
+            --document-name "AWS-RunShellScript" \
+            --comment "deploy chatbot $SHA" --timeout-seconds 1200 \
+            --parameters commands="[\"echo $B64 | base64 -d | sudo -u ec2-user bash\"]" \
+            --query 'Command.CommandId' --output text)
+          echo "SSM command $CMD"
+
+          # Polled, not `ssm wait command-executed`: that waiter gives up after
+          # ~100 seconds and then reports InProgress, which reads as a failed
+          # deploy while the release is still running.
+          STATUS=Pending
+          for i in $(seq 1 120); do
+            STATUS="$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$I" \
+              --query 'Status' --output text 2>/dev/null || echo Pending)"
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            [ $((i % 6)) -eq 0 ] && echo "  still $STATUS after $((i*10))s"
+            sleep 10
+          done
+
+          OUT="$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$I" \
+            --query 'StandardOutputContent' --output text || true)"
+          ERR="$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$I" \
+            --query 'StandardErrorContent' --output text || true)"
+          echo "$OUT"; [ -n "$ERR" ] && { echo "--- stderr ---"; echo "$ERR"; }
+
+          {
+            echo "### Chatbot deploy — $STATUS"
+            echo ""
+            echo '```'
+            echo "$OUT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$STATUS" = "Success" ] || { echo "::error::Chatbot release failed ($STATUS). release.sh rolls back automatically."; exit 1; }

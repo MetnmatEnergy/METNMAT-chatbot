@@ -1,0 +1,14 @@
+# Line endings.
+#
+# Development happens on Windows; the deploy target is Amazon Linux. A shell
+# script committed from a Windows checkout carries CRLF, and the kernel then
+# reads the shebang as "/usr/bin/env bash\r" and fails on the server with:
+#
+#     bash: line 1: /tmp/release-chat.sh: cannot execute: required file not found
+#
+# deploy/bin/* is fetched from S3 and executed on the EC2, so it must be LF
+# regardless of who commits it or how their git is configured.
+
+* text=auto
+
+*.sh text eol=lf
