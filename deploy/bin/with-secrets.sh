@@ -97,6 +97,40 @@ for name in $names; do
   fi
   rm -f "$errf"
 
+  # Secrets Manager stores two shapes and the console DEFAULTS to the one that
+  # breaks this. "Other type of secret" -> Key/value writes
+  #   {"MONGODB_URI":"mongodb+srv://..."}
+  # so the whole JSON object arrives as the value and the app receives a
+  # connection string that starts with a brace. That is exactly how a correct
+  # URI produced "Invalid scheme, expected connection string to start with
+  # mongodb://". Plaintext secrets are unaffected and take this branch never.
+  case "$value" in
+    "{"*)
+      # Extracted with sed, NOT python3 or jq. Neither is guaranteed on the box,
+      # and depending on an interpreter that might be absent would make this
+      # silently do nothing — which is the exact failure mode it exists to
+      # prevent. Connection strings and API keys contain no double quotes, so
+      # matching one field is sufficient for the shape the console writes.
+      extracted="$(printf %s "$value" | sed -n "s/.*\"${var}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p")"
+      if [ -n "$extracted" ]; then
+        log "$var was stored as a key/value secret — extracted the value for key '$var'"
+        value="$extracted"
+      else
+        log "WARNING: $var is JSON but has no key named '$var' — leaving it as-is."
+        log "  Store it as a PLAINTEXT secret, or use a key named exactly $var."
+      fi
+      ;;
+  esac
+
+  # A value stored WITH surrounding quotes is a different string from the one
+  # intended, and fails in ways that never mention quoting.
+  case "$value" in
+    \"*\"|'*') 
+      log "$var had surrounding quotes — stripping them"
+      value="$(printf %s "$value" | sed -e "s/^[\"']//" -e "s/[\"']$//")"
+      ;;
+  esac
+
   # PLACEHOLDER_SET_ME is the literal Terraform writes at secret creation. It
   # is committed to this repository and therefore public. The CMS already
   # refuses to start on it (payload.config.ts assertProductionConfig); flagging
