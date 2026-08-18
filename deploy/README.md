@@ -104,6 +104,7 @@ Payload version collections from exactly that mistake.
 | `JWT_SECRET` | required |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | rate limiting |
 | `FACEBOOK_PAGE_ACCESS_TOKEN`, `FACEBOOK_APP_SECRET`, `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_GRAPH_API_VERSION` | Messenger; optional |
+| `Meta_WA_accessToken`, `Meta_WA_SenderPhoneNumberId`, `Meta_WA_wabaId`, `Meta_WA_VerfyToken` | WhatsApp; optional. Genuinely optional since the client is built lazily — before that, their absence threw at import and killed the whole server. |
 | `INSTAGRAM_APP_SECRET`, `META_APP_SECRET` | optional |
 | `WHATSAPP_WEBHOOK_URL` | optional |
 | `MONGODB_DNS_SERVERS` | only if Atlas SRV lookup needs overriding |

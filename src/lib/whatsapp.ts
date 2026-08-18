@@ -52,10 +52,48 @@ export const WHATSAPP_API: AxiosInstance = axios.create({
     }
 });
 
-export const Whatsapp = new WhatsappCloudAPI({
-    accessToken: config.whatsapp.accessToken,
-    senderPhoneNumberId: config.whatsapp.phoneNumberId,
-    WABA_ID: config.whatsapp.wabaId,
+// Constructed LAZILY. The previous `new WhatsappCloudAPI({...})` at module
+// scope ran on import, and the wrapper throws `Missing "accessToken"` when the
+// token is absent — so an UNCONFIGURED OPTIONAL CHANNEL killed the entire
+// process at startup. The server routes import the meta webhook controller,
+// which imports this, so the chat widget and every HTTP endpoint went down
+// because WhatsApp credentials were not set.
+//
+// Now the failure is deferred to first use: the app boots and serves without
+// WhatsApp configured, and only the WhatsApp paths fail, with a message naming
+// the variables to set.
+type WhatsappClient = InstanceType<typeof WhatsappCloudAPI>;
+
+let _client: WhatsappClient | undefined;
+
+function whatsappClient(): WhatsappClient {
+    if (!_client) {
+        if (!config.whatsapp.accessToken || !config.whatsapp.phoneNumberId) {
+            throw new Error(
+                "WhatsApp is not configured — set Meta_WA_accessToken and " +
+                "Meta_WA_SenderPhoneNumberId (and Meta_WA_wabaId) to enable it."
+            );
+        }
+        _client = new WhatsappCloudAPI({
+            accessToken: config.whatsapp.accessToken,
+            senderPhoneNumberId: config.whatsapp.phoneNumberId,
+            WABA_ID: config.whatsapp.wabaId,
+        });
+    }
+    return _client;
+}
+
+/** True when the WhatsApp channel can actually be used. */
+export const whatsappConfigured = (): boolean =>
+    Boolean(config.whatsapp.accessToken && config.whatsapp.phoneNumberId);
+
+// A Proxy so existing call sites (Whatsapp.parseMessage, Whatsapp.sendImage)
+// keep working unchanged while construction stays deferred.
+export const Whatsapp: WhatsappClient = new Proxy({} as WhatsappClient, {
+    get(_target, prop) {
+        const value = (whatsappClient() as unknown as Record<string | symbol, unknown>)[prop];
+        return typeof value === "function" ? value.bind(whatsappClient()) : value;
+    },
 });
 
 /** WhatsApp text message body max: 4096 chars. */
