@@ -202,7 +202,12 @@ jobs:
             echo "export APP_NAME='${{ env.APP_NAME }}'"
             echo "export APP_ROOT='${{ env.APP_ROOT }}'"
             echo "export APP_PORT='${{ env.APP_PORT }}'"
-            echo "export HEALTH_PATH='/'"
+            # /health, not /. This app registers no root route — server.ts has
+            # /health, /integrate, /demo, /widget.js and /chat-widget, so / is a
+            # genuine 404 and a health check against it fails a perfectly
+            # healthy process. That is what "health check FAILED (404)" was:
+            # the app was up, connected to Mongo, and answering.
+            echo "export HEALTH_PATH='/health'"
             echo "export HEALTH_HOST='chat.metnmat.com'"
             echo "export HEALTH_OK_CODES='200 302 307'"
             echo "export HEALTH_TIMEOUT='150'"
