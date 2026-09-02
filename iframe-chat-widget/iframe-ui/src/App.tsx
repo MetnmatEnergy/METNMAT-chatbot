@@ -35,6 +35,31 @@ function App() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, isSending]);
 
+  /**
+   * Escape closes the chat.
+   *
+   * This half is not optional. Once focus is inside this iframe the keydown
+   * fires in THIS document and never reaches the host page, so the host's own
+   * Escape handler cannot see it — and the host is the only side that can
+   * actually hide the panel. Posting the same CLOSE_WIDGET the header's close
+   * button sends keeps one path for closing rather than two.
+   *
+   * Deliberately does not fire while a confirmation is showing: there, Escape
+   * should dismiss the question, not the whole conversation behind it.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (confirmNewChat) {
+        setConfirmNewChat(false);
+        return;
+      }
+      window.parent.postMessage({ type: 'CLOSE_WIDGET' }, '*');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmNewChat]);
+
   // The session could not be created — a 429 from the 20/min limiter, a cold
   // start, or no network. This used to be indistinguishable from "still
   // loading", so the widget showed a spinner forever, with no header and so no

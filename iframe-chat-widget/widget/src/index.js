@@ -66,6 +66,10 @@
         // Button
         const button = document.createElement('button');
         button.setAttribute('aria-label', 'Chat with a Metnmat specialist');
+        // A screen-reader user could not tell whether the panel they just
+        // toggled was open: the launcher exposed a label and nothing else.
+        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-controls', 'chat-widget-frame-container');
         button.innerHTML = ICON_ROBOT;
         button.style.width = '62px';
         button.style.height = '62px';
@@ -118,10 +122,23 @@
         iframe.style.height = '100%';
         iframe.style.border = 'none';
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');
+        // Without this a screen reader announces the chat as an unlabelled
+        // frame (WCAG 4.1.2).
+        iframe.setAttribute('title', 'Chat with a METNMAT specialist');
 
         iframeContainer.appendChild(iframe);
-        container.appendChild(iframeContainer);
+        /*
+         * The launcher is appended BEFORE the panel.
+         *
+         * It used to come after, so a keyboard user who opened the chat had to
+         * Shift+Tab BACKWARDS to reach the panel they had just opened — Tab
+         * moved past it into the host page instead. Both are absolutely or
+         * statically positioned and do not overlap, so paint order is unchanged;
+         * only the tab sequence moves, and it now follows the visual and logical
+         * order: open the thing, then step into it.
+         */
         container.appendChild(button);
+        container.appendChild(iframeContainer);
 
         // "Online" status dot over the button — signals a specialist is available.
         const statusDot = document.createElement('span');
@@ -135,6 +152,7 @@
 
         function toggleChat() {
             isOpen = !isOpen;
+            button.setAttribute('aria-expanded', String(isOpen));
 
             if (isOpen) {
                 iframeContainer.style.display = 'block';
@@ -143,6 +161,17 @@
                     iframeContainer.style.opacity = '1';
                     iframeContainer.style.transform = 'translateY(0) scale(1)';
                     iframeContainer.style.pointerEvents = 'all';
+                    /*
+                     * Move focus into the chat once it is actually interactive.
+                     * Opening it used to leave focus on the launcher, so a
+                     * keyboard or screen-reader user was told nothing had
+                     * happened and had to hunt for the panel.
+                     *
+                     * After the transition, not before: focusing an element that
+                     * is still pointer-events:none and mid-animation is
+                     * unreliable across browsers.
+                     */
+                    try { iframe.focus(); } catch (e) { /* focus is best-effort */ }
                 }, 10);
 
                 button.innerHTML = ICON_CLOSE;
@@ -159,12 +188,32 @@
                 iframeContainer.style.pointerEvents = 'none';
 
                 button.innerHTML = ICON_ROBOT;
+                /*
+                 * Hand focus back to the control that opened it. Without this,
+                 * closing left focus inside a panel that was about to be
+                 * display:none, and the next Tab restarted from the top of the
+                 * document.
+                 */
+                try { button.focus(); } catch (e) { /* focus is best-effort */ }
 
                 setTimeout(() => {
                     if (!isOpen) iframeContainer.style.display = 'none';
                 }, 400); // Wait for transition
             }
         }
+
+        /*
+         * Escape closes the chat.
+         *
+         * This half covers focus being on the HOST page — the launcher itself,
+         * or anywhere behind the panel. When focus is INSIDE the iframe the
+         * keydown fires in that document and never reaches here, which is why
+         * the chat UI posts CLOSE_WIDGET on Escape as well; the two together are
+         * what make the key work wherever focus happens to be.
+         */
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && isOpen) toggleChat();
+        });
 
         // Listen for messages from the iframe
         window.addEventListener('message', (event) => {
