@@ -17,7 +17,7 @@ export async function seedMetnmatProducts(): Promise<number> {
   await ProductModel.deleteMany({ brand: { $in: ["Nandi", "Ecavo"] } });
 
   for (const p of metnmat) {
-    await ProductModel.updateOne({ id: p.id }, { $set: p }, { upsert: true });
+    await ProductModel.updateOne({ id: String(p.id) }, { $set: p }, { upsert: true });
   }
   console.log(`[seed-business-data] Upserted ${metnmat.length} Metnmat products.`);
   return metnmat.length;
