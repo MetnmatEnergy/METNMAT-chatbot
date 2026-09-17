@@ -236,7 +236,15 @@ async function handleSalesIntent(
       providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
     });
 
-    const replyText = (result.text || "").trim();
+    // `result.text` is every step's text joined with no separator, so a model
+    // that narrates its tool call ("I'll check our catalog.") gets glued onto the
+    // answer: "…catalog.Yes — 8 electrodes…". DeepSeek does this; gpt-4o did not.
+    // The customer wants the text of the LAST step with any text, i.e. the answer
+    // written after the tool results came back. Fall back to the join.
+    const stepTexts = (result.steps ?? [])
+      .map((s) => String((s as { text?: string }).text ?? "").trim())
+      .filter(Boolean);
+    const replyText = (stepTexts[stepTexts.length - 1] || result.text || "").trim();
     if (!replyText) return undefined;
 
     const reply: SalesReply = { message: replyText, productImageLink: null, buttons: [] };

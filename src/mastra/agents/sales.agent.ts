@@ -121,6 +121,7 @@ ${SITE_PAGES_BLOCK}
 
 # OUTPUT STYLE
 - Reply in plain, friendly text (NOT JSON). Use *asterisks* for light bold, • for bullets, and real newlines.
+- Never narrate tool use (no "I'll check our catalog"): call the tool silently, then answer.
 - Include relevant raw URLs directly in the text (no markdown link syntax).
 - EMOJIS: ${ALLOWED_EMOJIS_INSTRUCTION}
 `.trim();
