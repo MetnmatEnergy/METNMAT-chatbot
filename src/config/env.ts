@@ -67,7 +67,7 @@ export function assertConfig(): void {
     const problems: string[] = [];
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim().length < 16)
         problems.push("JWT_SECRET (set a long random value)");
-    if (!process.env.ALLOWED_ORIGINS || !process.env.ALLOWED_ORIGINS.trim())
+    if (!process.env.ALLOWED_ORIGINS || !process.env.ALLOWED_ORIGINS.trim() || process.env.ALLOWED_ORIGINS.split(",").some((o) => o.trim() === "*"))
         problems.push("ALLOWED_ORIGINS (explicit origins, not '*')");
     if (!process.env.MONGODB_URI) problems.push("MONGODB_URI");
     if (!process.env.DEEPSEEK_API_KEY) problems.push("DEEPSEEK_API_KEY (the chat models; same account as the Command Center)");

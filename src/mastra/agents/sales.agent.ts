@@ -7,6 +7,7 @@ import { RETURNING_USER_GREETING_PROMPT } from "../prompts/returning-greeting.pr
 import { productRetrieverTool } from "../tools/product-retriever.tool";
 import { updateUserProfileTool } from "../tools/update-user-profile.tool";
 import { SITE_PAGES_BLOCK } from "../../lib/metnmat-contact";
+import { sanitizeProfileValue } from "../../lib/sanitize";
 
 const PRODUCT_INSTRUCTIONS = `
 # ROLE & VOICE (METNMAT TECHNICAL SALES)
@@ -141,11 +142,15 @@ export const salesAgent = new Agent({
     const userProfile = requestContext?.get("userProfile") as
       | { city?: string; userType?: string; businessName?: string }
       | undefined;
-    const contextLine =
-      userPhone != null
-        ? `\n\nCurrent user phone (use as userPhone when calling update-user-profile): ${userPhone}.`
-        : "";
-    const profileParts = [userProfile?.city, userProfile?.userType, userProfile?.businessName].filter(Boolean);
+    // The phone is no longer handed to the model: update-user-profile takes the
+    // verified session identity from the request context, so nothing the
+    // customer types can point a write at someone else's profile.
+    const contextLine = userPhone != null ? "\n\nThe current user's identity is known to the tools; never ask for a phone number to update their profile." : "";
+    // Profile values were typed by the customer at some point; they go into THIS
+    // system prompt, so they are sanitised on the way in (tool) and again here.
+    const profileParts = [userProfile?.city, userProfile?.userType, userProfile?.businessName]
+      .map(sanitizeProfileValue)
+      .filter(Boolean);
     const profileLine =
       userProfile && profileParts.length > 0
         ? ` We know: ${profileParts.join(", ")}.`

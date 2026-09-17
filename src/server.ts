@@ -11,12 +11,19 @@ import { ensureProductsSeeded } from "./lib/seed-products";
 import whatsappRouter from "./routes/whatsapp.routes";
 import widgetRouter from "./routes/widget.routes";
 import metaSocialRouter from "./routes/meta-social.routes";
+import { rateLimit } from "./lib/rate-limit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = config.app.port;
+// Behind Caddy on the v2 host the service must not be reachable from other
+// machines in the VPC (it was listening on every interface). Containers and
+// local dev keep the wide-open default; production sets BIND_HOST=127.0.0.1.
+const BIND_HOST = process.env.BIND_HOST?.trim() || "0.0.0.0";
+// The framework banner is free information for an attacker.
+app.disable("x-powered-by");
 const PUBLIC_URL = config.app.publicUrl;
 
 const WIDGET_PATH = path.join(__dirname, "../iframe-chat-widget/widget/dist");
@@ -43,6 +50,19 @@ const allowedOrigins = config.app.allowedOrigins;
  * already encoded, images, fonts — and honours `Cache-Control: no-transform`.
  */
 app.use(compression());
+
+// Baseline response headers. The chat UI route below replaces X-Frame-Options
+// with its frame-ancestors policy; everything else is not meant to be framed.
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+  }
+  next();
+});
 
 app.use(
   cors({
@@ -105,6 +125,10 @@ app.get("/demo", (_req: Request, res: Response) => {
   res.sendFile(path.join(PUBLIC_PATH, "demo.html"));
 });
 
+// Meta delivers in bursts from a handful of addresses; 120/min per address is
+// far above current volume and stops a forged-webhook flood from driving the
+// LLM at our cost. Signature checks still run first inside each router.
+app.use("/api/webhook", rateLimit({ keyPrefix: "webhook", limit: 120, windowMs: 60_000 }));
 app.use("/api/webhook", whatsappRouter);
 app.use("/api/webhook", metaSocialRouter);
 app.use("/widget", widgetRouter);
@@ -122,7 +146,7 @@ async function startServer() {
     await connectToDb();
     await ensureProductsSeeded();
 
-    app.listen(PORT, () => {
+    app.listen(Number(PORT), BIND_HOST, () => {
       console.log(`Metnmat chatbot running on ${PUBLIC_URL}`);
       console.log(`  Health:    ${PUBLIC_URL}/health`);
       console.log(`  Demo:      ${PUBLIC_URL}/demo`);

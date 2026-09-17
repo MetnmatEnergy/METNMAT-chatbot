@@ -10,10 +10,14 @@ import { processCustomerMessage } from '../../lib/chat-orchestrator';
 import { config } from '../../config/env';
 
 const JWT_SECRET = config.app.jwtSecret;
+/** Longest message the widget accepts; a real question fits in a fraction of this. */
+const MAX_MESSAGE_CHARS = 1000;
 
 function verifySessionToken(token: string): { conversationId: string } | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { conversationId?: string };
+    // Pin the algorithm: a verifier that accepts whatever `alg` the token claims
+    // is the classic JWT confusion bug, even if today's library refuses `none`.
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as { conversationId?: string };
     if (!payload?.conversationId) return null;
     return { conversationId: payload.conversationId };
   } catch {
@@ -120,8 +124,14 @@ export const sendMessage = async (req: Request, res: Response) => {
     try {
         const { conversationId, text, sessionToken } = req.body;
 
-        if (!conversationId || !text?.trim()) {
+        if (!conversationId || typeof text !== 'string' || !text.trim()) {
             res.status(400).json({ error: 'conversationId and text are required' });
+            return;
+        }
+        // Every turn is re-sent with up to 20 prior messages, so an uncapped
+        // message is multiplied on every later call. WhatsApp caps at 800.
+        if (text.length > MAX_MESSAGE_CHARS) {
+            res.status(400).json({ error: `Message too long (max ${MAX_MESSAGE_CHARS} characters).` });
             return;
         }
 

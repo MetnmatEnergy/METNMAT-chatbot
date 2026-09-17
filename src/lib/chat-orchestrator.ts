@@ -53,6 +53,8 @@ const RETURNING_USER_THRESHOLD = 1;
 const SALES_AGENT_MAX_STEPS = 10;
 /** View/create a ticket: at most a couple of tool calls before the answer. */
 const ISSUE_AGENT_MAX_STEPS = 6;
+/** A clarification needs no tools at all; one retriever call is plenty. */
+const CLARIFY_MAX_STEPS = 3;
 
 /**
  * The reply text of a plain-text agent call.
@@ -412,7 +414,7 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
     // clarifying, after which a JSON-only final answer cannot be relied on.
     const clarifyResult = await mastra.getAgent("sales-agent").generate(
       [...context, { id: "clarify", role: "system", content: CLARIFY_PROMPT }] as never,
-      { requestContext, providerOptions: DEEPSEEK_PROVIDER_OPTIONS }
+      { requestContext, maxSteps: CLARIFY_MAX_STEPS, providerOptions: DEEPSEEK_PROVIDER_OPTIONS }
     );
     const reply: SalesReply = {
       message: messageFromText(clarifyResult.text) || FALLBACK_ERROR_MESSAGE,

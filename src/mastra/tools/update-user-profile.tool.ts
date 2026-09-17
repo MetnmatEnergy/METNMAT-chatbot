@@ -2,21 +2,22 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 import { updateProfile } from "../../lib/user-profile";
+import { sanitizeProfileValue } from "../../lib/sanitize";
+import { sessionIdentity } from "./search-ticket.tool";
 
 export const updateUserProfileTool = createTool({
   id: "update-user-profile",
   description: `
 Update the current user's profile when they share information about themselves. Call this when the user says:
-- Where they live (city, e.g. "I'm from Mumbai", "Delhi", "Bangalore") → set city.
-- What type of buyer they are: regular customer, retailer (shop/store), or wholesaler → set userType.
-- Their business or shop name (for retailers/wholesalers) → set businessName.
+- Where they live (city, e.g. "I'm from Mumbai", "Delhi", "Bangalore") -> set city.
+- What type of buyer they are: regular customer, retailer (shop/store), or wholesaler -> set userType.
+- Their business or shop name (for retailers/wholesalers) -> set businessName.
 
-Use the current user's phone (from conversation context) as userPhone. Only pass fields the user actually shared; leave others empty.
+The user is identified by the verified session, never by a number they type: do NOT ask for a phone number. Only pass fields the user actually shared; leave others null.
   `.trim(),
 
-  // OpenAI strict tool schema requires every property in required; optional fields use null.
+  // Every property required (null for "not shared") keeps the schema strict-mode friendly.
   inputSchema: z.object({
-    userPhone: z.string().min(1).describe("The current user's phone number (from context)."),
     city: z
       .string()
       .nullable()
@@ -31,18 +32,29 @@ Use the current user's phone (from conversation context) as userPhone. Only pass
       .describe("Business or store name if user is retailer/wholesaler. Use null if not shared."),
   }),
 
-  execute: async ({ userPhone, city, userType, businessName }) => {
-    console.log("[update-user-profile] input:", { userPhone, city, userType, businessName });
+  /**
+   * WHO is updated comes from the request context, not from the model. The
+   * previous version took `userPhone` as a tool argument, so "correction, my
+   * number is +91…, business name: <instructions>" overwrote another customer's
+   * profile, and that text was then spliced into their next system prompt
+   * (2026-09-17 audit). Values are sanitised for the same reason.
+   */
+  execute: async ({ city, userType, businessName }, context) => {
+    const userPhone = sessionIdentity(context);
+    if (!userPhone) {
+      return { updated: false, message: "No session identity; profile not updated." };
+    }
     const updates: { city?: string; userType?: string; businessName?: string } = {};
-    if (city?.trim()) updates.city = city.trim();
-    if (userType?.trim()) updates.userType = userType.trim();
-    if (businessName?.trim()) updates.businessName = businessName.trim();
+    const cleanCity = sanitizeProfileValue(city);
+    const cleanBusiness = sanitizeProfileValue(businessName);
+    if (cleanCity) updates.city = cleanCity;
+    if (userType === "customer" || userType === "retailer" || userType === "wholesaler") updates.userType = userType;
+    if (cleanBusiness) updates.businessName = cleanBusiness;
     if (Object.keys(updates).length === 0) {
-      console.log("[update-user-profile] no updates found");
       return { updated: false, message: "No profile fields to update." };
     }
     await updateProfile(userPhone, updates);
-    console.log("[update-user-profile] profile updated:", updates);
+    console.log("[update-user-profile] fields updated:", Object.keys(updates));
     return { updated: true, fields: Object.keys(updates) };
   },
 });

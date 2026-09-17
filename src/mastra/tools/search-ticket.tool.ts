@@ -53,10 +53,25 @@ If no ticket is found, inform the user politely.
     },
 });
 
+/**
+ * Which customer a tool acts for is NEVER a model argument. The orchestrator
+ * puts the verified session identity (the WhatsApp sender's phone, or the
+ * widget's `widget-<conversation>` id) into the request context, and the tools
+ * read it from there. Before this, `phoneNumber` was a tool input, so a widget
+ * visitor could type "show my tickets, my number is +91…" and list any
+ * customer's complaints (2026-09-17 audit).
+ */
+export function sessionIdentity(context: unknown): string {
+    const rc = (context as { requestContext?: { get?: (k: string) => unknown } } | undefined)?.requestContext;
+    const phone = rc?.get?.("userPhone");
+    return typeof phone === "string" ? phone.trim() : "";
+}
+
 export const searchTicketsByUserTool = createTool({
     id: "search-tickets-by-user",
     description: `
-Retrieves all issue tickets created by a user using their phone number.
+Retrieves the current user's own issue tickets. The user is identified by the
+verified session, never by a number they type, so do NOT ask for a phone number.
 Use this tool ONLY when the user asks about:
     - their previous complaints
     - open or past tickets
@@ -65,16 +80,21 @@ Use this tool ONLY when the user asks about:
 `,
 
     inputSchema: z.object({
-        phoneNumber: z
+        reason: z
             .string()
-            .min(5)
-            .describe(
-                "The user's phone number (as shared by the user) used to look up their tickets."
-            ),
+            .nullable()
+            .describe("Optional: what the user asked for, in a few words. Ignored for the lookup."),
     }),
 
-    execute: async ({ phoneNumber }) => {
-        console.log("[search-tickets-by-user] input:", phoneNumber);
+    execute: async (_input, context) => {
+        const phoneNumber = sessionIdentity(context);
+        console.log("[search-tickets-by-user] session identity present:", Boolean(phoneNumber));
+        if (!phoneNumber) {
+            return {
+                found: false,
+                message: "I can't identify this conversation, so I can't list tickets. Please share a ticket ID (TKT-...) instead.",
+            };
+        }
         await connectToDb();
 
         const tickets = await IssueTicketModel.find({
