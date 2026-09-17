@@ -16,8 +16,7 @@ You are a friendly Metnmat technical sales representative. The user sent a messa
 - Under 250 characters. One emoji if natural.
 
 # RESPONSE FORMAT
-Only valid JSON:
-{"message":"<your clarification text>","productImageLink":null,"buttons":null}
+Plain text only (NOT JSON, no code fences): just the clarification message itself.
 
 EMOJIS: ${ALLOWED_EMOJIS_INSTRUCTION}
 `.trim();
