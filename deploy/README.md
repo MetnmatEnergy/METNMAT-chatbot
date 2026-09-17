@@ -97,7 +97,7 @@ Payload version collections from exactly that mistake.
 | Secret | Notes |
 |---|---|
 | `MONGODB_URI` | ⚠ ends `/metnmat` — **not** `metnmat_cms`, which is the CMS's |
-| `OPENAI_API_KEY` | required — serves both the chat models and the embeddings |
+| `DEEPSEEK_API_KEY` | required — serves every chat model (swapped from OpenAI 2026-09-17; same DeepSeek account as the Command Center). `OPENAI_API_KEY` is no longer read. Optional: `DEEPSEEK_MODEL`, `DEEPSEEK_FAST_MODEL`, `DEEPSEEK_THINKING` |
 | `PINECONE_API_KEY` | required |
 | `PINECONE_INDEX_NAME`, `PINECONE_NAMESPACE` | |
 | `AGENT_API_KEY` | required — authenticates callers to the agent API |
