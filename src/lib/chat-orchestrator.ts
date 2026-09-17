@@ -17,6 +17,7 @@ import { buildContext, logError, type ConversationContextMessage } from "./utils
 import { type AgentUsageInput, recordAgentUsage } from "./agent-usage";
 import { createConversationMessage, Role } from "../models/conversation-messages";
 import { mastra } from "../mastra";
+import { DEEPSEEK_PROVIDER_OPTIONS } from "../config/models";
 import {
   EMPTY_INTENT_DATA,
   intentClassifierOutputSchema,
@@ -91,7 +92,10 @@ async function postProcessLanguageFormatting(
           content: `USER MESSAGE:\n${userMessage}\n\nAI RESPONSE TO TRANSLATE AND FORMAT:\n${agentResponse}`,
         },
       ],
-      { structuredOutput: { schema: FormatterOutputSchema, jsonPromptInjection: true } }
+      {
+        structuredOutput: { schema: FormatterOutputSchema, jsonPromptInjection: true },
+        providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
+      }
     );
     recordAgentUsage("language-formatter-agent", result.usage as AgentUsageInput, {}).catch(() => {});
     if (result.object) {
@@ -126,11 +130,13 @@ async function classifyIntent(
 ): Promise<IntentClassifierOutput> {
   const agent = mastra.getAgent("intent-classifier-agent");
   try {
-    // The classifier runs on the FAST (8b) model, which does NOT support Groq's native
-    // json_schema response format — so the schema must be prompt-injected. Parse
-    // failures fall back to "greeting", which still routes to the sales agent.
+    // The schema is prompt-injected rather than sent as a native response_format:
+    // DeepSeek has no json_schema mode (and the Groq 8b model before it had none
+    // either). Parse failures fall back to "greeting", which still routes to the
+    // sales agent.
     const result = await agent.generate(messages as never, {
       structuredOutput: { schema: intentClassifierOutputSchema, jsonPromptInjection: true },
+      providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
     });
     recordAgentUsage("intent-classifier-agent", result.usage as AgentUsageInput, context).catch(() => {});
     return normalizeClassification(result.object);
@@ -165,6 +171,7 @@ async function handleIssueIntent(
     const result = await agent.generate(messages as never, {
       requestContext,
       structuredOutput: { schema: UserReplySchema, jsonPromptInjection: true },
+      providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
     });
     recordAgentUsage("issue-creation-agent", result.usage as AgentUsageInput, { userPhone: user.phone }).catch(() => {});
     const msg = (result.object as UserReply)?.message ?? "";
@@ -198,6 +205,7 @@ async function handleSalesIntent(
     const result = await agent.generate(messages as never, {
       requestContext,
       maxSteps: SALES_AGENT_MAX_STEPS,
+      providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
     });
 
     const replyText = (result.text || "").trim();
@@ -365,7 +373,11 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
   } else {
     const clarifyResult = await mastra.getAgent("sales-agent").generate(
       [...context, { id: "clarify", role: "system", content: CLARIFY_PROMPT }] as never,
-      { requestContext, structuredOutput: { schema: SalesReplySchema, jsonPromptInjection: true } }
+      {
+        requestContext,
+        structuredOutput: { schema: SalesReplySchema, jsonPromptInjection: true },
+        providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
+      }
     );
     const reply = (clarifyResult.object as SalesReply) ?? { message: clarifyResult.text ?? "", productImageLink: null, buttons: null };
     const msg = await postProcessLanguageFormatting(text, reply.message);
