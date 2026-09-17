@@ -25,14 +25,7 @@ import {
   type IntentClassifierOutput,
   type IntentExtractedData,
 } from "../mastra/agents/intent-classifier.agent";
-import {
-  type SalesReply,
-  SalesReplySchema,
-  UserReplySchema,
-  FormatterOutputSchema,
-  type UserReply,
-  type FormatterOutput,
-} from "../schemas/user-response";
+import { type SalesReply, FormatterOutputSchema, type FormatterOutput } from "../schemas/user-response";
 import { CLARIFY_PROMPT } from "../mastra/prompts/clarify.prompt";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
@@ -58,6 +51,35 @@ const FALLBACK_ERROR_MESSAGE =
 
 const RETURNING_USER_THRESHOLD = 1;
 const SALES_AGENT_MAX_STEPS = 10;
+/** View/create a ticket: at most a couple of tool calls before the answer. */
+const ISSUE_AGENT_MAX_STEPS = 6;
+
+/**
+ * The reply text of a plain-text agent call.
+ *
+ * Every tool-bearing call (sales, issue, clarify) now asks for prose and reads
+ * `result.text`, because prompt-injected JSON plus tools is unreliable: after a
+ * tool step the model's final text is often prose, Mastra then finds no object
+ * to validate and throws, and the customer gets the fallback message. That is
+ * exactly what the issue path did on DeepSeek (2026-09-17: "expected object,
+ * received undefined"). This helper still tolerates a model that answers in the
+ * old {"message": "..."} shape, fenced or not, so a stray JSON reply never
+ * reaches the customer verbatim.
+ */
+function messageFromText(text: string | null | undefined): string {
+  const raw = (text ?? "").trim();
+  if (!raw) return "";
+  const unfenced = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  if (unfenced.startsWith("{") && unfenced.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(unfenced) as { message?: unknown };
+      if (typeof parsed.message === "string" && parsed.message.trim()) return parsed.message.trim();
+    } catch {
+      /* not JSON after all: use the text as written */
+    }
+  }
+  return raw;
+}
 
 function formatWhatsAppMessage(text: string): string {
   let msg = text.trim();
@@ -168,13 +190,19 @@ async function handleIssueIntent(
 ): Promise<OrchestratorResult> {
   try {
     const agent = mastra.getAgent("issue-creation-agent");
+    // No structuredOutput here, for the same reason as the sales path: this agent
+    // calls tools, and prompt-injected JSON plus tools is unreliable. On DeepSeek
+    // the final text after a tool step was prose, Mastra found no object to
+    // validate and threw, and every ticket conversation got the fallback message
+    // (2026-09-17). The agent's instructions ask for plain text; messageFromText()
+    // still tolerates the old {"message": ...} shape.
     const result = await agent.generate(messages as never, {
       requestContext,
-      structuredOutput: { schema: UserReplySchema, jsonPromptInjection: true },
+      maxSteps: ISSUE_AGENT_MAX_STEPS,
       providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
     });
     recordAgentUsage("issue-creation-agent", result.usage as AgentUsageInput, { userPhone: user.phone }).catch(() => {});
-    const msg = (result.object as UserReply)?.message ?? "";
+    const msg = messageFromText(result.text);
     const formatted = msg ? await postProcessLanguageFormatting(originalText, msg) : FALLBACK_ERROR_MESSAGE;
     return { message: formatted, productImageLink: null, buttons: null };
   } catch (err: unknown) {
@@ -371,15 +399,18 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
     void getResponseLanguageForIssue(text);
     result = await handleIssueIntent(context, user, text, requestContext);
   } else {
+    // Plain text, like every other call on a tool-bearing agent (see
+    // handleIssueIntent): the sales agent may run product-retriever while
+    // clarifying, after which a JSON-only final answer cannot be relied on.
     const clarifyResult = await mastra.getAgent("sales-agent").generate(
       [...context, { id: "clarify", role: "system", content: CLARIFY_PROMPT }] as never,
-      {
-        requestContext,
-        structuredOutput: { schema: SalesReplySchema, jsonPromptInjection: true },
-        providerOptions: DEEPSEEK_PROVIDER_OPTIONS,
-      }
+      { requestContext, providerOptions: DEEPSEEK_PROVIDER_OPTIONS }
     );
-    const reply = (clarifyResult.object as SalesReply) ?? { message: clarifyResult.text ?? "", productImageLink: null, buttons: null };
+    const reply: SalesReply = {
+      message: messageFromText(clarifyResult.text) || FALLBACK_ERROR_MESSAGE,
+      productImageLink: null,
+      buttons: null,
+    };
     const msg = await postProcessLanguageFormatting(text, reply.message);
     result = {
       message: msg,

@@ -36,7 +36,7 @@ MAX 3 clarifying questions. NEVER ask for order ID (optional — pass null if no
 Nature of issue: Quality, Missing Item, Damaged, Expired, Delivery, Refund/Replacement
 
 # OUTPUT
-Provide final message in "message" field. Use *asterisks* for bold. No other markdown.
+Reply in plain, friendly text (NOT JSON, no code fences). Use *asterisks* for bold. No other markdown. Never paste raw tool output; summarise it in a sentence or two.
 `.trim(),
     tools: {
         createIssueTicketTool,
