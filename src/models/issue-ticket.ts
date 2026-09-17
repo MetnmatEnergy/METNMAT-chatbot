@@ -11,7 +11,8 @@ const { models } = mongoose;
  * WhatsApp user metadata
  */
 export interface WhatsAppUserInfo {
-    phoneNumber: string;          // E.164 format, e.g. +14155552671
+    phoneNumber: string;          // verified session identity (E.164 phone, or widget-<conversation>)
+    contactPhone?: string;        // a number the customer typed in chat; unverified, contact hint only
     name?: string;                // WhatsApp profile name (if available)
     whatsappId?: string;          // Platform-specific user ID
 }
@@ -75,6 +76,12 @@ const IssueTicketSchema = new Schema<IssueTicketDocument>(
                 index: true,
             },
             name: {
+                type: String,
+            },
+            // A number the customer TYPED in chat (unverified, may be anyone's).
+            // `phoneNumber` above is the verified session identity; only that one
+            // is ever used to look tickets up.
+            contactPhone: {
                 type: String,
             },
             whatsappId: {

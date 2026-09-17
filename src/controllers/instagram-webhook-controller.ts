@@ -15,6 +15,7 @@ export const verifyInstagramWebhook = async (req: Request, res: Response) => {
     if (
       mode &&
       token &&
+      config.instagram.verifyToken &&
       mode === INSTAGRAM_MODE &&
       token === config.instagram.verifyToken
     ) {
@@ -69,7 +70,10 @@ export const handleInstagramWebhook = async (req: Request, res: Response) => {
         try {
           await processIncomingCustomerMessage({
             platform: "instagram",
-            userId: senderId,
+            // Namespaced: an Instagram sender id must never collide with a
+            // WhatsApp phone, or one channel's messages land in another
+            // customer's history (and their next prompt).
+            userId: `ig:${senderId}`,
             userName: "Instagram User",
             text,
             messageId: message?.mid || message?.id || undefined,

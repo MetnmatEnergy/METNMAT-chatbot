@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { IssueTicketModel } from "../../models/issue-ticket";
 import connectToDb from "../../lib/connect-to-db";
+import { sanitizeProfileValue } from "../../lib/sanitize";
+import { sessionIdentity } from "./search-ticket.tool";
 
 export const createIssueTicketTool = createTool({
     id: "create-issue-ticket",
@@ -28,7 +30,7 @@ Creates a new issue ticket. Call this when you have: (1) nature of issue (Qualit
             phoneNumber: z
                 .string()
                 .describe(
-                    "The user's phone number as shared by the user. This is used to associate the ticket with the customer."
+                    "A contact number the user typed in this conversation, if any (empty string if none). It is stored as a contact hint only; the ticket is filed under the verified session identity, never under this value."
                 ),
         }),
 
@@ -67,16 +69,23 @@ Creates a new issue ticket. Call this when you have: (1) nature of issue (Qualit
             ),
     }),
 
-    execute: async ({ user, userQuery, issueDescription, issueTitle, orderId, priority, natureOfIssue }) => {
+    execute: async ({ user, userQuery, issueDescription, issueTitle, orderId, priority, natureOfIssue }, context) => {
         try {
             const normalizedQuery = userQuery.trim();
 
             await connectToDb();
 
-            console.log("[create-issue-ticket] data:", { user, userQuery, issueDescription, issueTitle, orderId, priority, natureOfIssue })
-
+            // The ticket belongs to the VERIFIED session identity (WhatsApp sender
+            // phone, or the widget's per-conversation id). A number the customer
+            // typed is kept only as a contact hint: before this, "my phone is
+            // +91…" filed the ticket under any customer's history (2026-09-17).
+            const sessionPhone = sessionIdentity(context);
+            if (!sessionPhone) {
+                throw new Error("Cannot create ticket: no session identity for this conversation");
+            }
             const u = user as { name?: string; phoneNumber?: string; phone?: string };
-            const userPhone = (u.phoneNumber ?? u.phone ?? "").trim();
+            const typedPhone = sanitizeProfileValue(u.phoneNumber ?? u.phone ?? "");
+            console.log("[create-issue-ticket] filing for session identity; contact hint present:", Boolean(typedPhone));
 
             // VALIDATION: Check if nature of issue is confirmed
             if (!natureOfIssue || natureOfIssue.trim() === "") {
@@ -84,8 +93,9 @@ Creates a new issue ticket. Call this when you have: (1) nature of issue (Qualit
             }
 
             const ticketUser = {
-                phoneNumber: u.phoneNumber ?? u.phone ?? userPhone,
-                name: u.name,
+                phoneNumber: sessionPhone,
+                name: sanitizeProfileValue(u.name) || undefined,
+                contactPhone: typedPhone || undefined,
             };
             const ticket = await IssueTicketModel.create({
                 ticketId: generateTicketId(),

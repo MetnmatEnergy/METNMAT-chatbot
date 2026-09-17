@@ -11,7 +11,9 @@ export const verifyFacebookWebhook = async (req: Request, res: Response) => {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === config.facebook.verifyToken) {
+    // Every operand must be present: with the token unset, `undefined === undefined`
+    // would let anyone subscribe their own Meta app to this endpoint.
+    if (mode === "subscribe" && token && config.facebook.verifyToken && token === config.facebook.verifyToken) {
       logger.info("Facebook webhook verified");
       return res.status(200).send(challenge);
     }
@@ -31,7 +33,9 @@ export const handleFacebookWebhook = async (req: Request, res: Response) => {
 
     await processIncomingCustomerMessage({
       platform: "facebook",
-      userId: parsed.senderId,
+      // Namespaced: a Messenger sender id must never collide with a WhatsApp
+      // phone, or one channel's messages land in another customer's history.
+      userId: `fb:${parsed.senderId}`,
       userName: "Facebook User",
       text: parsed.messageText,
       messageId: parsed.messageId,
