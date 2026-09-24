@@ -78,22 +78,28 @@ const SHORT_ENGLISH_WORDS = new Set([
  * Common Hinglish markers — Hindi words commonly written in Latin script.
  * If a Latin-script message contains 2+ of these, we classify as Hinglish.
  */
+/*
+ * Plain English words are NOT markers, however common they are in Hinglish:
+ * "to", "do", "par", "bare", "mere" and "bro" were, and with the one-marker rule
+ * for short messages below they classed "How to order electrodes?" as Hinglish,
+ * so English speakers got their answer translated (removed 2026-09-24).
+ */
 const HINGLISH_MARKERS = new Set([
   "hai", "hain", "ka", "ki", "ke", "ko", "kya", "kaise", "kaisa", "kaisi",
   "kab", "kaha", "kahan", "kyun", "kyu",
   "mein", "mei", "mujhe", "muje", "apna", "apni", "apne",
-  "aur", "ya", "par", "se", "pe", "tak", "bhi", "nahi", "nahin", "na",
+  "aur", "ya", "se", "pe", "tak", "bhi", "nahi", "nahin", "na",
   "acha", "accha", "achha", "theek", "thik", "sahi",
-  "toh", "to", "paas", "hota", "hoti", "hote", "lagta", "lagti",
-  "batao", "bataye", "bataiye", "dikhao", "dikha", "de", "do", "dena", "dedo",
+  "toh", "paas", "hota", "hoti", "hote", "lagta", "lagti",
+  "batao", "bataye", "bataiye", "dikhao", "dikha", "de", "dena", "dedo",
   "chahiye", "chaiye", "lena", "lelo", "karo", "karna", "karni",
-  "bhai", "bro", "yaar", "dost",
+  "bhai", "yaar", "dost",
   "haan", "ji", "nah",
   "wala", "wali", "wale",
   "bohot", "bahut", "boht", "zyada", "thoda", "kam",
   "paisa", "paise", "kitna", "kitne", "kitni",
   "lao", "bhejo", "mangta", "mangti",
-  "aapka", "aapki", "aapke", "tumhara", "tumhari", "mera", "meri", "mere",
+  "aapka", "aapki", "aapke", "tumhara", "tumhari", "mera", "meri",
   "sab", "sabhi", "koi", "kuch",
   "abhi", "pehle", "baad",
   "pata", "kaun", "daal", "sabzi", "roti", "kha", "khana", "peena",
@@ -103,7 +109,7 @@ const HINGLISH_MARKERS = new Set([
   "bech", "bechte", "bechna",
   "accha", "badiya", "badhiya", "mast",
   "konsa", "kaun", "kaunsa", "kaun sa",
-  "baare", "bare", "baarein",
+  "baare", "baarein",
   "isme", "uska", "uski", "uske", "iska", "iski", "iske",
   "woh", "yeh", "ye", "wo",
   "rakho", "rakhna", "daalo", "daalein", "lagao",
@@ -128,16 +134,19 @@ export function getResponseLanguage(userMessage: string): ResponseLanguageName |
   // Short common English words franc can't reliably detect
   if (SHORT_ENGLISH_WORDS.has(trimmed.toLowerCase())) return MATCH_USER_LANGUAGE;
 
-  const iso = franc(trimmed, { minLength: 1 });
-  if (!iso || iso === "und") return "English";
-
-  // Non-Latin scripts: franc is reliable
-  if (iso !== "eng") {
+  // Franc is reliable on a script (Devanagari, Tamil…) but not on short Latin
+  // text: "How to order electrodes?" comes back as Spanish, and the formatter
+  // then translated an English answer into it. Latin-script messages therefore
+  // skip franc and go through the English/Hinglish check below.
+  const latinOnly = /^[\p{Script=Latin}\p{M}\p{N}\p{P}\p{S}\s]*$/u.test(trimmed);
+  if (!latinOnly) {
+    const iso = franc(trimmed, { minLength: 1 });
+    if (!iso || iso === "und") return "English";
     const mapped = ISO_TO_RESPONSE[iso];
-    return mapped ?? "English";
+    if (iso !== "eng") return mapped ?? "English";
   }
 
-  // Latin script detected (eng) — check for Hinglish markers
+  // Latin script — check for Hinglish markers
   const words = trimmed.toLowerCase().split(/[\s,.!?;:]+/).filter(Boolean);
   const hinglishCount = words.filter(w => HINGLISH_MARKERS.has(w)).length;
 
@@ -151,7 +160,7 @@ export function getResponseLanguage(userMessage: string): ResponseLanguageName |
   }
 
   // Pure English
-  console.log(`[detect-language] English/MATCH: iso=${iso}, hinglish=${hinglishCount} in "${trimmed}"`);
+  console.log(`[detect-language] English/MATCH: hinglish=${hinglishCount} in "${trimmed}"`);
   return MATCH_USER_LANGUAGE;
 }
 

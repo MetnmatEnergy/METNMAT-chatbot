@@ -92,11 +92,23 @@ function formatWhatsAppMessage(text: string): string {
   return msg.trim();
 }
 
+/**
+ * The website widget answers in English only, whatever the visitor types
+ * (owner decision 2026-09-24). WhatsApp and the other channels keep following
+ * the customer's language.
+ */
+const ENGLISH_ONLY_CHANNELS: ReadonlySet<ChatChannel> = new Set<ChatChannel>(["widget"]);
+
+const ENGLISH_ONLY_PROMPT =
+  "LANGUAGE: Reply in English only, even if the customer writes in Hindi, Hinglish or any other language. Do not translate your answer.";
+
 async function postProcessLanguageFormatting(
   userMessage: string,
-  agentResponse: string
+  agentResponse: string,
+  englishOnly = false
 ): Promise<string> {
   if (!agentResponse.trim()) return agentResponse;
+  if (englishOnly) return formatWhatsAppMessage(agentResponse);
 
   // Skip the extra formatter LLM call for English — the sales/issue agents already
   // return well-formatted English, so running it only wastes Groq tokens (TPM budget),
@@ -188,7 +200,8 @@ async function handleIssueIntent(
   messages: ConversationContextMessage[],
   user: WebhookUser,
   originalText: string,
-  requestContext: RequestContext<WebhookRequestContext>
+  requestContext: RequestContext<WebhookRequestContext>,
+  englishOnly = false
 ): Promise<OrchestratorResult> {
   try {
     const agent = mastra.getAgent("issue-creation-agent");
@@ -205,7 +218,9 @@ async function handleIssueIntent(
     });
     recordAgentUsage("issue-creation-agent", result.usage as AgentUsageInput, { userPhone: user.phone }).catch(() => {});
     const msg = messageFromText(result.text);
-    const formatted = msg ? await postProcessLanguageFormatting(originalText, msg) : FALLBACK_ERROR_MESSAGE;
+    const formatted = msg
+      ? await postProcessLanguageFormatting(originalText, msg, englishOnly)
+      : FALLBACK_ERROR_MESSAGE;
     return { message: formatted, productImageLink: null, buttons: null };
   } catch (err: unknown) {
     logError("[handleIssueIntent]", err);
@@ -365,8 +380,15 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
     return contactResult;
   }
 
-  let preferredLanguage = getResponseLanguage(text);
-  if (preferredLanguage === MATCH_USER_LANGUAGE && profile?.preferredLanguage) {
+  const englishOnly = ENGLISH_ONLY_CHANNELS.has(channel);
+  // What the agents see: the conversation, plus the English-only rule on the
+  // channels that have it. The intent classifier keeps the plain context.
+  const agentContext: ConversationContextMessage[] = englishOnly
+    ? [...context, { id: "english-only", role: "system", content: ENGLISH_ONLY_PROMPT }]
+    : context;
+
+  let preferredLanguage = englishOnly ? "English" : getResponseLanguage(text);
+  if (!englishOnly && preferredLanguage === MATCH_USER_LANGUAGE && profile?.preferredLanguage) {
     const stored = profile.preferredLanguage.toLowerCase();
     if (stored === "hinglish") preferredLanguage = "Hinglish";
     else if (stored === "hindi") preferredLanguage = "Hindi";
@@ -395,9 +417,9 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
   let result: OrchestratorResult;
 
   if (intent === Intent.GREETING || intent === Intent.PRODUCT_QUERY || intent === Intent.CATALOG_QUERY) {
-    const sales = await handleSalesIntent(context, intent, data, requestContext, channel);
+    const sales = await handleSalesIntent(agentContext, intent, data, requestContext, channel);
     if (sales) {
-      sales.message = await postProcessLanguageFormatting(text, sales.message);
+      sales.message = await postProcessLanguageFormatting(text, sales.message, englishOnly);
       if (sales.buttons?.length && !sales.message.includes("http") && !sales.message.includes("7872686501")) {
         sales.message = injectLinksInText(sales.message, sales.buttons);
       }
@@ -407,13 +429,13 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
     }
   } else if (intent === Intent.VIEW_ISSUES || intent === Intent.CREATE_ISSUE_TICKET) {
     void getResponseLanguageForIssue(text);
-    result = await handleIssueIntent(context, user, text, requestContext);
+    result = await handleIssueIntent(agentContext, user, text, requestContext, englishOnly);
   } else {
     // Plain text, like every other call on a tool-bearing agent (see
     // handleIssueIntent): the sales agent may run product-retriever while
     // clarifying, after which a JSON-only final answer cannot be relied on.
     const clarifyResult = await mastra.getAgent("sales-agent").generate(
-      [...context, { id: "clarify", role: "system", content: CLARIFY_PROMPT }] as never,
+      [...agentContext, { id: "clarify", role: "system", content: CLARIFY_PROMPT }] as never,
       { requestContext, maxSteps: CLARIFY_MAX_STEPS, providerOptions: DEEPSEEK_PROVIDER_OPTIONS }
     );
     const reply: SalesReply = {
@@ -421,7 +443,7 @@ export async function processCustomerMessage(input: ProcessCustomerMessageInput)
       productImageLink: null,
       buttons: null,
     };
-    const msg = await postProcessLanguageFormatting(text, reply.message);
+    const msg = await postProcessLanguageFormatting(text, reply.message, englishOnly);
     result = {
       message: msg,
       productImageLink: reply.productImageLink ?? null,
