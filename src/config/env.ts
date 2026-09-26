@@ -5,11 +5,6 @@ export const config = {
     database: {
         MONGODB_URI: process.env.MONGODB_URI!,
     },
-    pinecone: {
-        apiKey: process.env.PINECONE_API_KEY!,
-        indexName: process.env.PINECONE_INDEX_NAME!,
-        namespace: process.env.PINECONE_NAMESPACE!,
-    },
     // DeepSeek serves every chat model (see config/models.ts). One provider, one
     // key, shared with the Command Center's account. There are no embeddings any
     // more: DeepSeek has no embeddings API and the bot never called the old one.
