@@ -93,11 +93,11 @@ function formatWhatsAppMessage(text: string): string {
 }
 
 /**
- * The website widget answers in English only, whatever the visitor types
- * (owner decision 2026-09-24). WhatsApp and the other channels keep following
- * the customer's language.
+ * The website widget and WhatsApp answer in English only, whatever the customer
+ * types (owner decisions 2026-09-24). Facebook and Instagram still follow the
+ * customer's language.
  */
-const ENGLISH_ONLY_CHANNELS: ReadonlySet<ChatChannel> = new Set<ChatChannel>(["widget"]);
+const ENGLISH_ONLY_CHANNELS: ReadonlySet<ChatChannel> = new Set<ChatChannel>(["widget", "whatsapp"]);
 
 const ENGLISH_ONLY_PROMPT =
   "LANGUAGE: Reply in English only, even if the customer writes in Hindi, Hinglish or any other language. Do not translate your answer.";
