@@ -99,9 +99,13 @@ jobs:
         run: |
           set -euo pipefail
           I="$PROD_INSTANCE_ID"
-          CMD=$(aws ssm send-command --instance-ids "$I" --document-name AWS-RunShellScript \
+          # A fixed SSM document, not AWS-RunShellScript: this job can release a build
+          # that is already in the artifact bucket, and nothing else. The only input is
+          # the commit sha, which SSM checks against ^[0-9a-f]{40}$ before it runs. The
+          # document is kept in METNMAT-WEBSITE: deploy/v2/aws/ssm/metnmat-release-chat.json.
+          CMD=$(aws ssm send-command --instance-ids "$I" --document-name "metnmat-release-chat" \
             --comment "release ${APP} ${SHA}" --timeout-seconds 900 \
-            --parameters commands="[\"export ARTIFACT_BUCKET='${ARTIFACT_BUCKET}' HEALTH_TIMEOUT=150\",\"/usr/local/sbin/metnmat-release ${APP} ${SHA}\"]" \
+            --parameters "sha=${SHA}" \
             --query 'Command.CommandId' --output text)
           STATUS=Pending
           for i in $(seq 1 90); do
