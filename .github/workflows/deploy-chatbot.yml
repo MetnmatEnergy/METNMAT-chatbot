@@ -42,7 +42,6 @@ jobs:
     steps:
       - name: Guard configuration
         run: |
-          [ -n "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" ] || { echo "::error::AWS_DEPLOY_ROLE_ARN secret not set (OIDC only)"; exit 1; }
           [ -n "${{ env.PROD_INSTANCE_ID }}" ]         || { echo "::error::PROD_INSTANCE_ID repository variable not set"; exit 1; }
       - uses: actions/checkout@v4
         with:
@@ -74,7 +73,7 @@ jobs:
           echo "artifact: $(du -h "$ARTIFACT_NAME" | cut -f1)"
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::976134557584:role/metnmat-deploy-chatbot
           role-session-name: gha-chat-build-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Upload artifact + checksum
@@ -90,7 +89,7 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::976134557584:role/metnmat-deploy-chatbot
           role-session-name: gha-chat-release-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Release over SSM (root, metnmat-release)
